@@ -1,6 +1,6 @@
 //! # fsbex
 //!
-//! Library for extracting audio from FMOD sound banks
+//! `fsbex` is a library for extracting audio from FMOD sound banks. Only FSB version 5 is supported for now.
 
 #![warn(clippy::pedantic, future_incompatible)]
 #![deny(
@@ -27,4 +27,3 @@
     unused_results,
     unused_tuple_struct_fields
 )]
-#![cfg_attr(not(test), no_std)]

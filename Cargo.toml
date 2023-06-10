@@ -8,6 +8,6 @@ readme = "README.md"
 repository = "https://github.com/astral4/fsbex"
 license = "MIT OR Apache-2.0"
 keywords = ["audio", "datamining", "fmod"]
-categories = ["encoding", "multimedia::audio", "multimedia::encoding", "no-std", "parser-implementations"]
+categories = ["encoding", "multimedia::audio", "multimedia::encoding", "parser-implementations"]
 
 [dependencies]

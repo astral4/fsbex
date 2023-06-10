@@ -4,7 +4,7 @@
 [![Docs.rs](https://img.shields.io/docsrs/fsbex)](https://docs.rs/fsbex)
 [![License](https://img.shields.io/crates/l/fsbex)](#license)
 
-Library for extracting audio from FMOD sound banks
+`fsbex` is a library for extracting audio from FMOD sound banks. Only FSB version 5 is supported for now.
 
 ## License
 
