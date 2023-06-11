@@ -75,13 +75,17 @@ impl Error for ParseError {}
 
 #[cfg(test)]
 mod test {
-    use super::{Needed, ParseError, Reader};
-    use std::num::NonZeroUsize;
+    use super::{Needed, ParseError, ParseResult, Reader};
+    use std::{
+        io::{Error as IoError, ErrorKind, Read, Result as IoResult},
+        num::NonZeroUsize,
+    };
 
     #[test]
     fn parse_single_number() {
         let data = b"\x00\x00\x00\x00\x00\x00";
         let mut reader = Reader::new(&data[..]);
+
         assert_eq!(reader.le_u32(), Ok(0));
     }
 
@@ -89,6 +93,7 @@ mod test {
     fn parse_multiple_numbers() {
         let data = b"\x11\x00\x00\x00\x34\x12\x00\x00\x66\x66\x66\x66\xFF\xFF\xFF\xFF";
         let mut reader = Reader::new(&data[..]);
+
         assert_eq!(reader.le_u32(), Ok(17));
         assert_eq!(reader.le_u32(), Ok(4660));
         assert_eq!(reader.le_u32(), Ok(1_717_986_918));
@@ -99,11 +104,57 @@ mod test {
     fn handle_incomplete_data() {
         let data = b"\x00\x00";
         let mut reader = Reader::new(&data[..]);
+
         assert_eq!(
             reader.le_u32(),
             Err(ParseError::Incomplete(Needed::Size(
                 NonZeroUsize::new(2).unwrap()
             )))
         );
+    }
+
+    #[derive(Default)]
+    struct InterruptReader(usize);
+
+    impl Read for InterruptReader {
+        fn read(&mut self, _buf: &mut [u8]) -> IoResult<usize> {
+            if self.0 < 3 {
+                self.0 += 1;
+                Err(IoError::from(ErrorKind::Interrupted))
+            } else {
+                Ok(0)
+            }
+        }
+    }
+
+    #[test]
+    fn interrupt_reader_works() {
+        let mut buf: [u8; 0] = Default::default();
+        let mut reader = InterruptReader::default();
+
+        assert!(reader
+            .read(&mut buf)
+            .is_err_and(|e| e.kind() == ErrorKind::Interrupted));
+        assert!(reader
+            .read(&mut buf)
+            .is_err_and(|e| e.kind() == ErrorKind::Interrupted));
+        assert!(reader
+            .read(&mut buf)
+            .is_err_and(|e| e.kind() == ErrorKind::Interrupted));
+        assert!(matches!(reader.read(&mut buf), Ok(0)));
+    }
+
+    impl<R: Read> Reader<R> {
+        fn unit(&mut self) -> ParseResult<()> {
+            let mut buf: [u8; 0] = Default::default();
+            Self::read_to_buf::<0>(self, &mut buf)
+        }
+    }
+
+    #[test]
+    fn handle_interrupted_io() {
+        let mut reader = Reader::new(InterruptReader::default());
+
+        assert_eq!(reader.unit(), Ok(()));
     }
 }
