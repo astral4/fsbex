@@ -113,7 +113,6 @@ mod test {
         );
     }
 
-    #[derive(Default)]
     struct InterruptReader(usize);
 
     impl Read for InterruptReader {
@@ -130,7 +129,7 @@ mod test {
     #[test]
     fn interrupt_reader_works() {
         let mut buf: [u8; 0] = Default::default();
-        let mut reader = InterruptReader::default();
+        let mut reader = InterruptReader(0);
 
         assert!(reader
             .read(&mut buf)
@@ -153,7 +152,7 @@ mod test {
 
     #[test]
     fn handle_interrupted_io() {
-        let mut reader = Reader::new(InterruptReader::default());
+        let mut reader = Reader::new(InterruptReader(0));
 
         assert_eq!(reader.unit(), Ok(()));
     }
