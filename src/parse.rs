@@ -6,7 +6,7 @@ use std::{
     num::NonZeroUsize,
 };
 
-struct Reader<R: Read>(R);
+pub(crate) struct Reader<R: Read>(R);
 
 impl<R: Read> Reader<R> {
     fn new(reader: R) -> Self {
@@ -32,31 +32,31 @@ impl<R: Read> Reader<R> {
         }
     }
 
-    fn take<const LEN: usize>(&mut self) -> ParseResult<[u8; LEN]> {
+    pub(crate) fn take<const LEN: usize>(&mut self) -> ParseResult<[u8; LEN]> {
         let mut buf = [0; LEN];
         Self::read_to_array(self, &mut buf)?;
         Ok(buf)
     }
 
-    fn u8(&mut self) -> ParseResult<u8> {
+    pub(crate) fn u8(&mut self) -> ParseResult<u8> {
         let mut buf = [0; 1];
         Self::read_to_array(self, &mut buf)?;
         Ok(buf[0])
     }
 
-    fn le_u32(&mut self) -> ParseResult<u32> {
+    pub(crate) fn le_u32(&mut self) -> ParseResult<u32> {
         let mut buf = [0; 4];
         Self::read_to_array(self, &mut buf)?;
         Ok(u32::from_le_bytes(buf))
     }
 
-    fn le_u64(&mut self) -> ParseResult<u64> {
+    pub(crate) fn le_u64(&mut self) -> ParseResult<u64> {
         let mut buf = [0; 8];
         Self::read_to_array(self, &mut buf)?;
         Ok(u64::from_le_bytes(buf))
     }
 
-    fn le_i32(&mut self) -> ParseResult<i32> {
+    pub(crate) fn le_i32(&mut self) -> ParseResult<i32> {
         let mut buf = [0; 4];
         Self::read_to_array(self, &mut buf)?;
         Ok(i32::from_le_bytes(buf))
@@ -67,14 +67,14 @@ type ParseResult<T> = Result<T, ParseError>;
 
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
-enum ParseError {
+pub(crate) enum ParseError {
     Incomplete(Needed),
     Failure,
 }
 
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
-enum Needed {
+pub(crate) enum Needed {
     Unknown,
     Size(NonZeroUsize),
 }
