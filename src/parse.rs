@@ -13,7 +13,7 @@ impl<R: Read> Reader<R> {
         Self(reader)
     }
 
-    fn read_to_buf<const LEN: usize>(&mut self, buf: &mut [u8; LEN]) -> ParseResult<()> {
+    fn read_to_array<const LEN: usize>(&mut self, buf: &mut [u8; LEN]) -> ParseResult<()> {
         match self.0.read(buf) {
             Ok(n) => {
                 if n == LEN {
@@ -25,7 +25,7 @@ impl<R: Read> Reader<R> {
                 }
             }
             Err(e) => match e.kind() {
-                ErrorKind::Interrupted => self.read_to_buf(buf),
+                ErrorKind::Interrupted => self.read_to_array(buf),
                 ErrorKind::UnexpectedEof => Err(ParseError::Incomplete(Needed::Unknown)),
                 _ => Err(ParseError::Failure),
             },
@@ -33,8 +33,8 @@ impl<R: Read> Reader<R> {
     }
 
     fn le_u32(&mut self) -> ParseResult<u32> {
-        let mut buf: [u8; 4] = Default::default();
-        Self::read_to_buf(self, &mut buf)?;
+        let mut buf = [0; 4];
+        Self::read_to_array(self, &mut buf)?;
         Ok(u32::from_le_bytes(buf))
     }
 }
@@ -115,8 +115,8 @@ mod test {
 
     impl<R: Read> Reader<R> {
         fn unit(&mut self) -> ParseResult<()> {
-            let mut buf: [u8; 0] = Default::default();
-            Self::read_to_buf(self, &mut buf)
+            let mut buf = [0; 0];
+            Self::read_to_array(self, &mut buf)
         }
     }
 
@@ -135,7 +135,7 @@ mod test {
 
     #[test]
     fn interrupt_reader_works() {
-        let mut buf: [u8; 0] = Default::default();
+        let mut buf = [0; 0];
         let mut reader = InterruptReader(0);
 
         assert!(reader
@@ -167,7 +167,7 @@ mod test {
 
     #[test]
     fn eof_reader_works() {
-        let mut buf: [u8; 0] = Default::default();
+        let mut buf = [0; 0];
         let mut reader = EofReader;
 
         assert!(reader
@@ -192,7 +192,7 @@ mod test {
 
     #[test]
     fn unsupported_reader_works() {
-        let mut buf: [u8; 0] = Default::default();
+        let mut buf = [0; 0];
         let mut reader = UnsupportedReader;
 
         assert!(reader
