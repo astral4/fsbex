@@ -32,10 +32,34 @@ impl<R: Read> Reader<R> {
         }
     }
 
+    fn take<const LEN: usize>(&mut self) -> ParseResult<[u8; LEN]> {
+        let mut buf = [0; LEN];
+        Self::read_to_array(self, &mut buf)?;
+        Ok(buf)
+    }
+
+    fn u8(&mut self) -> ParseResult<u8> {
+        let mut buf = [0; 1];
+        Self::read_to_array(self, &mut buf)?;
+        Ok(buf[0])
+    }
+
     fn le_u32(&mut self) -> ParseResult<u32> {
         let mut buf = [0; 4];
         Self::read_to_array(self, &mut buf)?;
         Ok(u32::from_le_bytes(buf))
+    }
+
+    fn le_u64(&mut self) -> ParseResult<u64> {
+        let mut buf = [0; 8];
+        Self::read_to_array(self, &mut buf)?;
+        Ok(u64::from_le_bytes(buf))
+    }
+
+    fn le_i32(&mut self) -> ParseResult<i32> {
+        let mut buf = [0; 4];
+        Self::read_to_array(self, &mut buf)?;
+        Ok(i32::from_le_bytes(buf))
     }
 }
 
@@ -82,6 +106,17 @@ mod test {
     };
 
     #[test]
+    fn take_bytes() {
+        let data = b"abc123";
+        let mut reader = Reader::new(&data[..]);
+
+        assert_eq!(reader.take(), Ok([]));
+        assert_eq!(reader.take(), Ok([97]));
+        assert_eq!(reader.take(), Ok([98, 99]));
+        assert_eq!(reader.take(), Ok([49, 50, 51]));
+    }
+
+    #[test]
     fn parse_single_number() {
         let data = b"\x00\x00\x00\x00\x00\x00";
         let mut reader = Reader::new(&data[..]);
@@ -100,6 +135,16 @@ mod test {
         assert_eq!(reader.le_u32(), Ok(u32::MAX));
     }
 
+    #[test]
+    fn parse_multiple_number_types() {
+        let data = b"\x11\x00\x00\x00\x00\x00\x00\xFF\xFF\x22";
+        let mut reader = Reader::new(&data[..]);
+
+        assert_eq!(reader.le_u32(), Ok(17));
+        assert_eq!(reader.u8(), Ok(0));
+        assert_eq!(reader.le_i32(), Ok(-65536));
+        assert_eq!(reader.u8(), Ok(34));
+    }
     #[test]
     fn handle_incomplete_data() {
         let data = b"\x00\x00";
