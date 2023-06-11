@@ -156,4 +156,29 @@ mod test {
 
         assert_eq!(reader.unit(), Ok(()));
     }
+
+    struct EofReader;
+
+    impl Read for EofReader {
+        fn read(&mut self, _buf: &mut [u8]) -> IoResult<usize> {
+            Err(IoError::from(ErrorKind::UnexpectedEof))
+        }
+    }
+
+    #[test]
+    fn eof_reader_works() {
+        let mut buf: [u8; 0] = Default::default();
+        let mut reader = EofReader;
+
+        assert!(reader
+            .read(&mut buf)
+            .is_err_and(|e| e.kind() == ErrorKind::UnexpectedEof));
+    }
+
+    #[test]
+    fn handle_unexpected_eof() {
+        let mut reader = Reader::new(EofReader);
+
+        assert_eq!(reader.unit(), Err(ParseError::Incomplete(Needed::Unknown)));
+    }
 }
