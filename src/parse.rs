@@ -83,12 +83,12 @@ impl Display for ParseError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         let msg = match self {
             Self::Incomplete(needed) => match needed {
-                Needed::Unknown => Cow::Borrowed("Incomplete data"),
+                Needed::Unknown => Cow::Borrowed("incomplete data"),
                 Needed::Size(size) => Cow::Owned(format!(
-                    "Incomplete data: needed {size} more bytes to parse"
+                    "incomplete data: needed {size} more bytes to parse"
                 )),
             },
-            Self::Failure => Cow::Borrowed("Failed to parse data"),
+            Self::Failure => Cow::Borrowed("failed to parse data"),
         };
 
         f.write_str(msg.borrow())
