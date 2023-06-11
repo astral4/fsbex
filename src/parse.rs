@@ -181,4 +181,29 @@ mod test {
 
         assert_eq!(reader.unit(), Err(ParseError::Incomplete(Needed::Unknown)));
     }
+
+    struct UnsupportedReader;
+
+    impl Read for UnsupportedReader {
+        fn read(&mut self, _buf: &mut [u8]) -> IoResult<usize> {
+            Err(IoError::from(ErrorKind::Unsupported))
+        }
+    }
+
+    #[test]
+    fn unsupported_reader_works() {
+        let mut buf: [u8; 0] = Default::default();
+        let mut reader = UnsupportedReader;
+
+        assert!(reader
+            .read(&mut buf)
+            .is_err_and(|e| e.kind() == ErrorKind::Unsupported));
+    }
+
+    #[test]
+    fn handle_misc_io_error() {
+        let mut reader = Reader::new(UnsupportedReader);
+
+        assert_eq!(reader.unit(), Err(ParseError::Failure));
+    }
 }
