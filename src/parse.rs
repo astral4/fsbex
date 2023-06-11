@@ -113,6 +113,13 @@ mod test {
         );
     }
 
+    impl<R: Read> Reader<R> {
+        fn unit(&mut self) -> ParseResult<()> {
+            let mut buf: [u8; 0] = Default::default();
+            Self::read_to_buf(self, &mut buf)
+        }
+    }
+
     struct InterruptReader(usize);
 
     impl Read for InterruptReader {
@@ -141,13 +148,6 @@ mod test {
             .read(&mut buf)
             .is_err_and(|e| e.kind() == ErrorKind::Interrupted));
         assert!(matches!(reader.read(&mut buf), Ok(0)));
-    }
-
-    impl<R: Read> Reader<R> {
-        fn unit(&mut self) -> ParseResult<()> {
-            let mut buf: [u8; 0] = Default::default();
-            Self::read_to_buf::<0>(self, &mut buf)
-        }
     }
 
     #[test]
