@@ -25,7 +25,7 @@ impl<R: Read> Reader<R> {
                 }
             }
             Err(e) => match e.kind() {
-                ErrorKind::Interrupted => self.read_to_buf::<LEN>(buf),
+                ErrorKind::Interrupted => self.read_to_buf(buf),
                 ErrorKind::UnexpectedEof => Err(ParseError::Incomplete(Needed::Unknown)),
                 _ => Err(ParseError::Failure),
             },
@@ -34,7 +34,7 @@ impl<R: Read> Reader<R> {
 
     fn le_u32(&mut self) -> ParseResult<u32> {
         let mut buf: [u8; 4] = Default::default();
-        Self::read_to_buf::<4>(self, &mut buf)?;
+        Self::read_to_buf(self, &mut buf)?;
         Ok(u32::from_le_bytes(buf))
     }
 }
