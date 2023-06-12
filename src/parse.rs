@@ -1,5 +1,4 @@
 use std::{
-    borrow::{Borrow, Cow},
     error::Error,
     fmt::{Display, Formatter, Result as FmtResult},
     io::{ErrorKind, Read},
@@ -81,17 +80,15 @@ pub(crate) enum Needed {
 
 impl Display for ParseError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        let msg = match self {
+        match self {
             Self::Incomplete(needed) => match needed {
-                Needed::Unknown => Cow::Borrowed("incomplete data"),
-                Needed::Size(size) => Cow::Owned(format!(
+                Needed::Unknown => f.write_str("incomplete data"),
+                Needed::Size(size) => f.write_str(&format!(
                     "incomplete data: needed {size} more bytes to parse"
                 )),
             },
-            Self::Failure => Cow::Borrowed("failed to parse data"),
-        };
-
-        f.write_str(msg.borrow())
+            Self::Failure => f.write_str("failed to parse data"),
+        }
     }
 }
 
