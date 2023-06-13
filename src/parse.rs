@@ -1,7 +1,7 @@
 use std::{
     error::Error,
     fmt::{Display, Formatter, Result as FmtResult},
-    io::{ErrorKind, Read},
+    io::{Error as IoError, ErrorKind, Read},
     num::NonZeroUsize,
 };
 
@@ -26,7 +26,7 @@ impl<R: Read> Reader<R> {
             Err(e) => match e.kind() {
                 ErrorKind::Interrupted => self.read_to_array(buf),
                 ErrorKind::UnexpectedEof => Err(ParseError::Incomplete(Needed::Unknown)),
-                _ => Err(ParseError::Failure),
+                _ => Err(ParseError::Failure(e)),
             },
         }
     }
@@ -65,34 +65,51 @@ impl<R: Read> Reader<R> {
 type ParseResult<T> = Result<T, ParseError>;
 
 #[derive(Debug)]
-#[cfg_attr(test, derive(PartialEq))]
 pub(crate) enum ParseError {
+    Failure(IoError),
     Incomplete(Needed),
-    Failure,
+}
+
+#[cfg(test)]
+impl PartialEq for ParseError {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Failure(first), Self::Failure(second)) => first.kind() == second.kind(),
+            (Self::Incomplete(first), Self::Incomplete(second)) => first == second,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
 pub(crate) enum Needed {
-    Unknown,
     Size(NonZeroUsize),
+    Unknown,
 }
 
 impl Display for ParseError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
+            Self::Failure(_) => f.write_str("failed to parse data due to I/O error"),
             Self::Incomplete(needed) => match needed {
-                Needed::Unknown => f.write_str("incomplete data"),
                 Needed::Size(size) => f.write_str(&format!(
                     "incomplete data: needed {size} more bytes to parse"
                 )),
+                Needed::Unknown => f.write_str("incomplete data"),
             },
-            Self::Failure => f.write_str("failed to parse data"),
         }
     }
 }
 
-impl Error for ParseError {}
+impl Error for ParseError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Failure(err) => Some(err),
+            Self::Incomplete(_) => None,
+        }
+    }
+}
 
 #[cfg(test)]
 mod test {
@@ -246,6 +263,9 @@ mod test {
     fn handle_misc_io_error() {
         let mut reader = Reader::new(UnsupportedReader);
 
-        assert_eq!(reader.unit(), Err(ParseError::Failure));
+        assert_eq!(
+            reader.unit(),
+            Err(ParseError::Failure(IoError::from(ErrorKind::Unsupported)))
+        );
     }
 }
