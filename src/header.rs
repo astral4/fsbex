@@ -121,7 +121,8 @@ impl Error for HeaderError {
 
 #[cfg(test)]
 mod test {
-    use super::{Header, HeaderErrorKind, FSB5_MAGIC};
+    #[allow(clippy::enum_glob_use)]
+    use super::{Header, HeaderErrorKind::*, FSB5_MAGIC};
     use crate::parse::Reader;
 
     #[test]
@@ -129,13 +130,13 @@ mod test {
         let mut reader;
 
         reader = Reader::new(b"".as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == HeaderErrorKind::Magic));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == Magic));
 
         reader = Reader::new(b"abcd".as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == HeaderErrorKind::Magic));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == Magic));
 
         reader = Reader::new(FSB5_MAGIC.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == HeaderErrorKind::FormatVersion));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == FormatVersion));
     }
 
     #[test]
@@ -144,10 +145,66 @@ mod test {
 
         let data = b"FSB5\x00";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == HeaderErrorKind::FormatVersion));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == FormatVersion));
 
-        let data = b"FSB5\x00\x00\x00\x0F";
+        let data = b"FSB5\xFF\x00\x00\x00";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == HeaderErrorKind::FormatVersion));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == FormatVersion));
+
+        let data = b"FSB5\x01\x00\x00\x00";
+        reader = Reader::new(data.as_slice());
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == TotalSubsongs));
+    }
+
+    #[test]
+    fn parse_total_subsongs() {
+        let mut reader;
+
+        let data = b"FSB5\x01\x00\x00\x00\x00";
+        reader = Reader::new(data.as_slice());
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == TotalSubsongs));
+
+        let data = b"FSB5\x01\x00\x00\x00\x00\x00\xFF\xFF";
+        reader = Reader::new(data.as_slice());
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == SampleHeaderSize));
+    }
+
+    #[test]
+    fn parse_sample_header_size() {
+        let mut reader;
+
+        let data = b"FSB5\x01\x00\x00\x000000\x00";
+        reader = Reader::new(data.as_slice());
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == SampleHeaderSize));
+
+        let data = b"FSB5\x01\x00\x00\x0000000000";
+        reader = Reader::new(data.as_slice());
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == NameTableSize));
+    }
+
+    #[test]
+    fn parse_name_table_size() {
+        let mut reader;
+
+        let data = b"FSB5\x01\x00\x00\x0000000000\x00";
+        reader = Reader::new(data.as_slice());
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == NameTableSize));
+
+        let data = b"FSB5\x01\x00\x00\x00000000000000";
+        reader = Reader::new(data.as_slice());
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == SampleDataSize));
+    }
+
+    #[test]
+    fn parse_sample_data_size() {
+        let mut reader;
+
+        let data = b"FSB5\x01\x00\x00\x00000000000000\x00";
+        reader = Reader::new(data.as_slice());
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == SampleDataSize));
+
+        let data = b"FSB5\x01\x00\x00\x000000000000000000";
+        reader = Reader::new(data.as_slice());
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == Codec));
     }
 }
