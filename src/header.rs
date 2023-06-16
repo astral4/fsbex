@@ -10,36 +10,37 @@ struct Header {}
 
 impl Header {
     fn parse<R: Read>(reader: &mut Reader<R>) -> Result<Self, HeaderError> {
+        #[allow(clippy::enum_glob_use)]
+        use HeaderErrorKind::*;
+
         match reader.take() {
             Ok(data) if data == FSB5_MAGIC => Ok(()),
-            Err(e) => Err(HeaderError::new_with_source(HeaderErrorKind::Magic, e)),
-            _ => Err(HeaderError::new(HeaderErrorKind::Magic)),
+            Err(e) => Err(HeaderError::new_with_source(Magic, e)),
+            _ => Err(HeaderError::new(Magic)),
         }?;
 
         let version = match reader.le_u32() {
-            Ok(n) => Version::parse(n),
-            Err(e) => Err(HeaderError::new_with_source(HeaderErrorKind::Version, e)),
+            Ok(n) => FormatVersion::parse(n),
+            Err(e) => Err(HeaderError::new_with_source(Version, e)),
         }?;
 
         let total_subsongs = reader
             .le_u32()
-            .map_err(|e| HeaderError::new_with_source(HeaderErrorKind::TotalSubsongs, e))?;
+            .map_err(HeaderError::factory(TotalSubsongs))?;
 
         let sample_header_size = reader
             .le_u32()
-            .map_err(|e| HeaderError::new_with_source(HeaderErrorKind::SampleHeaderSize, e))?;
+            .map_err(HeaderError::factory(SampleHeaderSize))?;
 
         let name_table_size = reader
             .le_u32()
-            .map_err(|e| HeaderError::new_with_source(HeaderErrorKind::NameTableSize, e))?;
+            .map_err(HeaderError::factory(NameTableSize))?;
 
         let sample_data_size = reader
             .le_u32()
-            .map_err(|e| HeaderError::new_with_source(HeaderErrorKind::SampleDataSize, e))?;
+            .map_err(HeaderError::factory(SampleDataSize))?;
 
-        let codec = reader
-            .le_u32()
-            .map_err(|e| HeaderError::new_with_source(HeaderErrorKind::Codec, e))?;
+        let codec = reader.le_u32().map_err(HeaderError::factory(Codec))?;
 
         todo!()
     }
@@ -47,12 +48,12 @@ impl Header {
 
 const FSB5_MAGIC: [u8; 4] = *b"FSB5";
 
-enum Version {
+enum FormatVersion {
     V0,
     V1,
 }
 
-impl Version {
+impl FormatVersion {
     fn parse(num: u32) -> Result<Self, HeaderError> {
         match num {
             0 => Ok(Self::V0),
@@ -89,20 +90,24 @@ impl HeaderError {
             source: Some(source),
         }
     }
+    fn factory(kind: HeaderErrorKind) -> impl FnOnce(ParseError) -> Self {
+        |source| Self::new_with_source(kind, source)
+    }
 }
 
 impl Display for HeaderError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        #[allow(clippy::enum_glob_use)]
+        use HeaderErrorKind::*;
+
         match self.kind {
-            HeaderErrorKind::Magic => f.write_str("no file signature found"),
-            HeaderErrorKind::Version => f.write_str("invalid file format version"),
-            HeaderErrorKind::TotalSubsongs => f.write_str("failed to parse number of subsongs"),
-            HeaderErrorKind::SampleHeaderSize => {
-                f.write_str("failed to parse size of sample header")
-            }
-            HeaderErrorKind::NameTableSize => f.write_str("failed to parse size of name table"),
-            HeaderErrorKind::SampleDataSize => f.write_str("failed to parse size of sample data"),
-            HeaderErrorKind::Codec => f.write_str("failed to parse codec"),
+            Magic => f.write_str("no file signature found"),
+            Version => f.write_str("invalid file format version"),
+            TotalSubsongs => f.write_str("failed to parse number of subsongs"),
+            SampleHeaderSize => f.write_str("failed to parse size of sample header"),
+            NameTableSize => f.write_str("failed to parse size of name table"),
+            SampleDataSize => f.write_str("failed to parse size of sample data"),
+            Codec => f.write_str("failed to parse codec"),
         }
     }
 }
