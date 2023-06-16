@@ -27,4 +27,5 @@
     unused_tuple_struct_fields
 )]
 
+mod header;
 mod parse;
