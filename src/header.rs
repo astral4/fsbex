@@ -21,6 +21,26 @@ impl Header {
             Err(e) => Err(HeaderError::new_with_source(HeaderErrorKind::Version, e)),
         }?;
 
+        let total_subsongs = reader
+            .le_u32()
+            .map_err(|e| HeaderError::new_with_source(HeaderErrorKind::TotalSubsongs, e))?;
+
+        let sample_header_size = reader
+            .le_u32()
+            .map_err(|e| HeaderError::new_with_source(HeaderErrorKind::SampleHeaderSize, e))?;
+
+        let name_table_size = reader
+            .le_u32()
+            .map_err(|e| HeaderError::new_with_source(HeaderErrorKind::NameTableSize, e))?;
+
+        let sample_data_size = reader
+            .le_u32()
+            .map_err(|e| HeaderError::new_with_source(HeaderErrorKind::SampleDataSize, e))?;
+
+        let codec = reader
+            .le_u32()
+            .map_err(|e| HeaderError::new_with_source(HeaderErrorKind::Codec, e))?;
+
         todo!()
     }
 }
@@ -43,7 +63,6 @@ impl Version {
 }
 
 #[derive(Debug)]
-#[cfg_attr(test, derive(PartialEq))]
 struct HeaderError {
     kind: HeaderErrorKind,
     source: Option<ParseError>,
@@ -53,6 +72,11 @@ struct HeaderError {
 enum HeaderErrorKind {
     Magic,
     Version,
+    TotalSubsongs,
+    SampleHeaderSize,
+    NameTableSize,
+    SampleDataSize,
+    Codec,
 }
 
 impl HeaderError {
@@ -72,6 +96,13 @@ impl Display for HeaderError {
         match self.kind {
             HeaderErrorKind::Magic => f.write_str("no file signature found"),
             HeaderErrorKind::Version => f.write_str("invalid file format version"),
+            HeaderErrorKind::TotalSubsongs => f.write_str("failed to parse number of subsongs"),
+            HeaderErrorKind::SampleHeaderSize => {
+                f.write_str("failed to parse size of sample header")
+            }
+            HeaderErrorKind::NameTableSize => f.write_str("failed to parse size of name table"),
+            HeaderErrorKind::SampleDataSize => f.write_str("failed to parse size of sample data"),
+            HeaderErrorKind::Codec => f.write_str("failed to parse codec"),
         }
     }
 }
