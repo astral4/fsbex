@@ -20,8 +20,8 @@ impl Header {
         }?;
 
         let version = match reader.le_u32() {
-            Ok(n) => FormatVersion::parse(n),
-            Err(e) => Err(HeaderError::new_with_source(Version, e)),
+            Ok(n) => Version::parse(n),
+            Err(e) => Err(HeaderError::new_with_source(FormatVersion, e)),
         }?;
 
         let total_subsongs = reader
@@ -48,17 +48,17 @@ impl Header {
 
 const FSB5_MAGIC: [u8; 4] = *b"FSB5";
 
-enum FormatVersion {
+enum Version {
     V0,
     V1,
 }
 
-impl FormatVersion {
+impl Version {
     fn parse(num: u32) -> Result<Self, HeaderError> {
         match num {
             0 => Ok(Self::V0),
             1 => Ok(Self::V1),
-            _ => Err(HeaderError::new(HeaderErrorKind::Version)),
+            _ => Err(HeaderError::new(HeaderErrorKind::FormatVersion)),
         }
     }
 }
@@ -72,7 +72,7 @@ struct HeaderError {
 #[derive(Debug, PartialEq)]
 enum HeaderErrorKind {
     Magic,
-    Version,
+    FormatVersion,
     TotalSubsongs,
     SampleHeaderSize,
     NameTableSize,
@@ -102,7 +102,7 @@ impl Display for HeaderError {
 
         match self.kind {
             Magic => f.write_str("no file signature found"),
-            Version => f.write_str("invalid file format version"),
+            FormatVersion => f.write_str("invalid file format version"),
             TotalSubsongs => f.write_str("failed to parse number of subsongs"),
             SampleHeaderSize => f.write_str("failed to parse size of sample header"),
             NameTableSize => f.write_str("failed to parse size of name table"),
@@ -135,7 +135,7 @@ mod test {
         assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == HeaderErrorKind::Magic));
 
         reader = Reader::new(FSB5_MAGIC.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == HeaderErrorKind::Version));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == HeaderErrorKind::FormatVersion));
     }
 
     #[test]
@@ -144,10 +144,10 @@ mod test {
 
         let data = b"FSB5\x00";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == HeaderErrorKind::Version));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == HeaderErrorKind::FormatVersion));
 
         let data = b"FSB5\x00\x00\x00\x0F";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == HeaderErrorKind::Version));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == HeaderErrorKind::FormatVersion));
     }
 }
