@@ -101,4 +101,17 @@ mod test {
         reader = Reader::new(FSB5_MAGIC.as_slice());
         assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == HeaderErrorKind::Version));
     }
+
+    #[test]
+    fn parse_version() {
+        let mut reader;
+
+        let data = b"FSB5\x00";
+        reader = Reader::new(data.as_slice());
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == HeaderErrorKind::Version));
+
+        let data = b"FSB5\x00\x00\x00\x0F";
+        reader = Reader::new(data.as_slice());
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == HeaderErrorKind::Version));
+    }
 }
