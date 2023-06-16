@@ -8,19 +8,37 @@ use std::{
 #[derive(Debug, PartialEq)]
 struct Header {}
 
-const FSB5_MAGIC: [u8; 4] = *b"FSB5";
-
 impl Header {
     fn parse<R: Read>(reader: &mut Reader<R>) -> Result<Self, HeaderError> {
-        if reader
-            .take()
-            .map_err(|e| HeaderError::new_with_source(HeaderErrorKind::Magic, e))?
-            != FSB5_MAGIC
-        {
-            return Err(HeaderError::new(HeaderErrorKind::Magic));
-        }
+        match reader.take() {
+            Ok(data) if data == FSB5_MAGIC => Ok(()),
+            Err(e) => Err(HeaderError::new_with_source(HeaderErrorKind::Magic, e)),
+            _ => Err(HeaderError::new(HeaderErrorKind::Magic)),
+        }?;
+
+        let version = match reader.le_u32() {
+            Ok(n) => Version::parse(n),
+            Err(e) => Err(HeaderError::new_with_source(HeaderErrorKind::Version, e)),
+        }?;
 
         todo!()
+    }
+}
+
+const FSB5_MAGIC: [u8; 4] = *b"FSB5";
+
+enum Version {
+    V0,
+    V1,
+}
+
+impl Version {
+    fn parse(num: u32) -> Result<Self, HeaderError> {
+        match num {
+            0 => Ok(Self::V0),
+            1 => Ok(Self::V1),
+            _ => Err(HeaderError::new(HeaderErrorKind::Version)),
+        }
     }
 }
 
@@ -34,6 +52,7 @@ struct HeaderError {
 #[derive(Debug, PartialEq)]
 enum HeaderErrorKind {
     Magic,
+    Version,
 }
 
 impl HeaderError {
@@ -52,6 +71,7 @@ impl Display for HeaderError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self.kind {
             HeaderErrorKind::Magic => f.write_str("no file signature found"),
+            HeaderErrorKind::Version => f.write_str("invalid file format version"),
         }
     }
 }
