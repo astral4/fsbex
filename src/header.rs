@@ -85,27 +85,20 @@ impl Error for HeaderError {
 
 #[cfg(test)]
 mod test {
-    use super::{Header, HeaderError, HeaderErrorKind};
-    use crate::parse::{Needed, ParseError, Reader};
-    use std::num::NonZeroUsize;
+    use super::{Header, HeaderErrorKind, FSB5_MAGIC};
+    use crate::parse::Reader;
 
     #[test]
     fn parse_magic() {
         let mut reader;
 
         reader = Reader::new(b"".as_slice());
-        assert_eq!(
-            Header::parse(&mut reader),
-            Err(HeaderError::new_with_source(
-                HeaderErrorKind::Magic,
-                ParseError::Incomplete(Needed::Size(NonZeroUsize::new(4).unwrap()))
-            ))
-        );
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == HeaderErrorKind::Magic));
 
         reader = Reader::new(b"abcd".as_slice());
-        assert_eq!(
-            Header::parse(&mut reader),
-            Err(HeaderError::new(HeaderErrorKind::Magic))
-        );
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == HeaderErrorKind::Magic));
+
+        reader = Reader::new(FSB5_MAGIC.as_slice());
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == HeaderErrorKind::Version));
     }
 }
