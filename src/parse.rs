@@ -8,7 +8,7 @@ use std::{
 pub(crate) struct Reader<R: Read>(R);
 
 impl<R: Read> Reader<R> {
-    fn new(reader: R) -> Self {
+    pub(crate) fn new(reader: R) -> Self {
         Self(reader)
     }
 
@@ -81,8 +81,7 @@ impl PartialEq for ParseError {
     }
 }
 
-#[derive(Debug)]
-#[cfg_attr(test, derive(PartialEq))]
+#[derive(Debug, PartialEq)]
 pub(crate) enum Needed {
     Size(NonZeroUsize),
     Unknown,
@@ -122,7 +121,7 @@ mod test {
     #[test]
     fn take_bytes() {
         let data = b"abc123";
-        let mut reader = Reader::new(&data[..]);
+        let mut reader = Reader::new(data.as_slice());
 
         assert_eq!(reader.take(), Ok([]));
         assert_eq!(reader.take(), Ok([97]));
@@ -133,7 +132,7 @@ mod test {
     #[test]
     fn parse_single_number() {
         let data = b"\x00\x00\x00\x00\x00\x00";
-        let mut reader = Reader::new(&data[..]);
+        let mut reader = Reader::new(data.as_slice());
 
         assert_eq!(reader.le_u32(), Ok(0));
     }
@@ -141,7 +140,7 @@ mod test {
     #[test]
     fn parse_multiple_numbers() {
         let data = b"\x11\x00\x00\x00\x34\x12\x00\x00\x66\x66\x66\x66\xFF\xFF\xFF\xFF";
-        let mut reader = Reader::new(&data[..]);
+        let mut reader = Reader::new(data.as_slice());
 
         assert_eq!(reader.le_u32(), Ok(17));
         assert_eq!(reader.le_u32(), Ok(4660));
@@ -152,7 +151,7 @@ mod test {
     #[test]
     fn parse_multiple_number_types() {
         let data = b"\x11\x00\x00\x00\x00\x00\x00\xFF\xFF\x22";
-        let mut reader = Reader::new(&data[..]);
+        let mut reader = Reader::new(data.as_slice());
 
         assert_eq!(reader.le_u32(), Ok(17));
         assert_eq!(reader.u8(), Ok(0));
@@ -162,7 +161,7 @@ mod test {
     #[test]
     fn handle_incomplete_data() {
         let data = b"\x00\x00";
-        let mut reader = Reader::new(&data[..]);
+        let mut reader = Reader::new(data.as_slice());
 
         assert_eq!(
             reader.le_u32(),
