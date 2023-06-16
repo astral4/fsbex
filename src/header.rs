@@ -96,21 +96,16 @@ mod test {
         reader = Reader::new(b"".as_slice());
         assert_eq!(
             Header::parse(&mut reader),
-            Err(HeaderError {
-                kind: HeaderErrorKind::Magic,
-                source: Some(ParseError::Incomplete(Needed::Size(
-                    NonZeroUsize::new(4).unwrap()
-                )))
-            })
+            Err(HeaderError::new_with_source(
+                HeaderErrorKind::Magic,
+                ParseError::Incomplete(Needed::Size(NonZeroUsize::new(4).unwrap()))
+            ))
         );
 
         reader = Reader::new(b"abcd".as_slice());
         assert_eq!(
             Header::parse(&mut reader),
-            Err(HeaderError {
-                kind: HeaderErrorKind::Magic,
-                source: None
-            })
+            Err(HeaderError::new(HeaderErrorKind::Magic))
         );
     }
 }
