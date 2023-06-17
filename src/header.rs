@@ -53,6 +53,13 @@ impl Header {
             .skip((base_header_size - 28).try_into().unwrap())
             .map_err(HeaderError::factory(Metadata))?;
 
+        for stream_index in 0..total_subsongs.into() {
+            let sample_mode = reader.le_u64().map_err(StreamError::factory(
+                stream_index,
+                StreamErrorKind::SampleMode,
+            ))?;
+        }
+
         todo!()
     }
 }
@@ -77,7 +84,7 @@ impl Version {
 #[derive(Debug)]
 struct HeaderError {
     kind: HeaderErrorKind,
-    source: Option<ParseError>,
+    source: Option<HeaderErrorSource>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -90,18 +97,27 @@ enum HeaderErrorKind {
     SampleDataSize,
     Codec,
     Metadata,
+    Stream,
+}
+
+#[derive(Debug)]
+enum HeaderErrorSource {
+    Parse(ParseError),
+    Stream(StreamError),
 }
 
 impl HeaderError {
     fn new(kind: HeaderErrorKind) -> Self {
         Self { kind, source: None }
     }
+
     fn new_with_source(kind: HeaderErrorKind, source: ParseError) -> Self {
         Self {
             kind,
-            source: Some(source),
+            source: Some(HeaderErrorSource::Parse(source)),
         }
     }
+
     fn factory(kind: HeaderErrorKind) -> impl FnOnce(ParseError) -> Self {
         |source| Self::new_with_source(kind, source)
     }
@@ -121,11 +137,79 @@ impl Display for HeaderError {
             SampleDataSize => f.write_str("failed to parse size of sample data"),
             Codec => f.write_str("failed to parse codec"),
             Metadata => f.write_str("failed to read (unused) metadata bytes"),
+            Stream => f.write_str("failed to parse stream header"),
         }
     }
 }
 
 impl Error for HeaderError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match &self.source {
+            Some(source) => match source {
+                HeaderErrorSource::Parse(e) => Some(e),
+                HeaderErrorSource::Stream(e) => Some(e),
+            },
+            None => None,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct StreamError {
+    index: u32,
+    kind: StreamErrorKind,
+    source: Option<ParseError>,
+}
+
+#[derive(Debug)]
+enum StreamErrorKind {
+    SampleMode,
+}
+
+impl StreamError {
+    fn new(index: u32, kind: StreamErrorKind) -> HeaderError {
+        Self {
+            index,
+            kind,
+            source: None,
+        }
+        .into()
+    }
+
+    fn new_with_source(index: u32, kind: StreamErrorKind, source: ParseError) -> HeaderError {
+        Self {
+            index,
+            kind,
+            source: Some(source),
+        }
+        .into()
+    }
+
+    fn factory(index: u32, kind: StreamErrorKind) -> impl FnOnce(ParseError) -> HeaderError {
+        move |source| Self::new_with_source(index, kind, source)
+    }
+}
+
+impl From<StreamError> for HeaderError {
+    fn from(value: StreamError) -> Self {
+        Self {
+            kind: HeaderErrorKind::Stream,
+            source: Some(HeaderErrorSource::Stream(value)),
+        }
+    }
+}
+
+impl Display for StreamError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        match self.kind {
+            StreamErrorKind::SampleMode => f.write_str("failed to parse sample mode"),
+        }?;
+
+        f.write_str(&format!(" (stream at index {})", self.index))
+    }
+}
+
+impl Error for StreamError {
     #[allow(trivial_casts)]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         self.source.as_ref().map(|e| e as &dyn Error)
