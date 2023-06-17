@@ -13,6 +13,7 @@ impl Header {
     fn parse<R: Read>(reader: &mut Reader<R>) -> Result<Self, HeaderError> {
         #[allow(clippy::enum_glob_use)]
         use HeaderErrorKind::*;
+        use StreamErrorKind::*;
 
         match reader.take() {
             Ok(data) if data == FSB5_MAGIC => Ok(()),
@@ -53,11 +54,37 @@ impl Header {
             .skip((base_header_size - 28).try_into().unwrap())
             .map_err(HeaderError::factory(Metadata))?;
 
-        for stream_index in 0..total_subsongs.into() {
-            let sample_mode = reader.le_u64().map_err(StreamError::factory(
-                stream_index,
-                StreamErrorKind::SampleMode,
-            ))?;
+        for index in 0..total_subsongs.into() {
+            let sample_mode = reader
+                .le_u64()
+                .map_err(StreamError::factory(index, SampleMode))?;
+
+            let num_samples = (sample_mode >> 34) & 0x3FFF_FFFF;
+
+            let data_offset = ((sample_mode >> 7) & 0x07FF_FFFF) << 5;
+
+            let channels: u8 = match (sample_mode >> 5) & 0x03 {
+                0 => 1,
+                1 => 2,
+                2 => 6,
+                3 => 8,
+                _ => unreachable!(),
+            };
+
+            let sample_rate = match (sample_mode >> 1) & 0x0f {
+                0 => Ok(4000),
+                1 => Ok(8000),
+                2 => Ok(11000),
+                3 => Ok(11025),
+                4 => Ok(16000),
+                5 => Ok(22050),
+                6 => Ok(24000),
+                7 => Ok(32000),
+                8 => Ok(44100),
+                9 => Ok(48000),
+                10 => Ok(96000),
+                _ => Err(StreamError::new(index, SampleRate)),
+            }?;
         }
 
         todo!()
@@ -164,6 +191,7 @@ struct StreamError {
 #[derive(Debug)]
 enum StreamErrorKind {
     SampleMode,
+    SampleRate,
 }
 
 impl StreamError {
@@ -203,6 +231,7 @@ impl Display for StreamError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self.kind {
             StreamErrorKind::SampleMode => f.write_str("failed to parse sample mode"),
+            StreamErrorKind::SampleRate => f.write_str("failed to parse sample rate"),
         }?;
 
         f.write_str(&format!(" (stream at index {})", self.index))
