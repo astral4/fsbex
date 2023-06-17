@@ -37,6 +37,12 @@ impl<R: Read> Reader<R> {
         Ok(buf)
     }
 
+    #[allow(unused_results)]
+    pub(crate) fn skip<const LEN: usize>(&mut self) -> ParseResult<()> {
+        Self::take::<LEN>(self)?;
+        Ok(())
+    }
+
     pub(crate) fn u8(&mut self) -> ParseResult<u8> {
         let mut buf = [0; 1];
         Self::read_to_array(self, &mut buf)?;
@@ -123,10 +129,33 @@ mod test {
         let data = b"abc123";
         let mut reader = Reader::new(data.as_slice());
 
-        assert_eq!(reader.take(), Ok([]));
         assert_eq!(reader.take(), Ok([97]));
         assert_eq!(reader.take(), Ok([98, 99]));
         assert_eq!(reader.take(), Ok([49, 50, 51]));
+        assert_eq!(reader.take(), Ok([]));
+        assert_eq!(
+            reader.take::<1>(),
+            Err(ParseError::Incomplete(Needed::Size(
+                NonZeroUsize::new(1).unwrap()
+            )))
+        );
+    }
+
+    #[test]
+    fn skip_bytes() {
+        let data = b"abc123";
+        let mut reader = Reader::new(data.as_slice());
+
+        assert_eq!(reader.skip::<1>(), Ok(()));
+        assert_eq!(reader.skip::<2>(), Ok(()));
+        assert_eq!(reader.skip::<3>(), Ok(()));
+        assert_eq!(reader.skip::<0>(), Ok(()));
+        assert_eq!(
+            reader.skip::<1>(),
+            Err(ParseError::Incomplete(Needed::Size(
+                NonZeroUsize::new(1).unwrap()
+            )))
+        );
     }
 
     #[test]
@@ -158,6 +187,7 @@ mod test {
         assert_eq!(reader.le_i32(), Ok(-65536));
         assert_eq!(reader.u8(), Ok(34));
     }
+
     #[test]
     fn handle_incomplete_data() {
         let data = b"\x00\x00";
