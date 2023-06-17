@@ -12,8 +12,7 @@ struct Header {}
 impl Header {
     fn parse<R: Read>(reader: &mut Reader<R>) -> Result<Self, HeaderError> {
         #[allow(clippy::enum_glob_use)]
-        use HeaderErrorKind::*;
-        use StreamErrorKind::*;
+        use {HeaderErrorKind::*, StreamErrorKind::*};
 
         match reader.take() {
             Ok(data) if data == FSB5_MAGIC => Ok(()),
@@ -229,9 +228,12 @@ impl From<StreamError> for HeaderError {
 
 impl Display for StreamError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        #[allow(clippy::enum_glob_use)]
+        use StreamErrorKind::*;
+
         match self.kind {
-            StreamErrorKind::SampleMode => f.write_str("failed to parse sample mode"),
-            StreamErrorKind::SampleRate => f.write_str("failed to parse sample rate"),
+            SampleMode => f.write_str("failed to parse sample mode"),
+            SampleRate => f.write_str("failed to parse sample rate"),
         }?;
 
         f.write_str(&format!(" (stream at index {})", self.index))
@@ -375,13 +377,15 @@ mod test {
             buf.append(&mut vec![0; 48]);
             buf
         };
-        // reader = Reader::new(&ok_v0_data);
+        reader = Reader::new(&ok_v0_data);
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == Stream));
 
         let ok_v1_data = {
             let mut buf = Vec::from(V1_HEADER_BASE);
             buf.append(&mut vec![0; 52]);
             buf
         };
-        // reader = Reader::new(&ok_v1_data);
+        reader = Reader::new(&ok_v1_data);
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == Stream));
     }
 }
