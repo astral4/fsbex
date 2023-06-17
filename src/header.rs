@@ -3,6 +3,7 @@ use std::{
     error::Error,
     fmt::{Display, Formatter, Result as FmtResult},
     io::Read,
+    num::NonZeroU32,
 };
 
 #[derive(Debug, PartialEq)]
@@ -24,9 +25,10 @@ impl Header {
             Err(e) => Err(HeaderError::new_with_source(FormatVersion, e)),
         }?;
 
-        let total_subsongs = reader
-            .le_u32()
-            .map_err(HeaderError::factory(TotalSubsongs))?;
+        let total_subsongs = match reader.le_u32() {
+            Ok(n) => NonZeroU32::new(n).ok_or_else(|| HeaderError::new(TotalSubsongs)),
+            Err(e) => Err(HeaderError::new_with_source(TotalSubsongs, e)),
+        }?;
 
         let sample_header_size = reader
             .le_u32()
@@ -103,7 +105,7 @@ impl Display for HeaderError {
         match self.kind {
             Magic => f.write_str("no file signature found"),
             FormatVersion => f.write_str("invalid file format version"),
-            TotalSubsongs => f.write_str("failed to parse number of subsongs"),
+            TotalSubsongs => f.write_str("invalid number of subsongs"),
             SampleHeaderSize => f.write_str("failed to parse size of sample header"),
             NameTableSize => f.write_str("failed to parse size of name table"),
             SampleDataSize => f.write_str("failed to parse size of sample data"),
@@ -161,6 +163,10 @@ mod test {
         let mut reader;
 
         let data = b"FSB5\x01\x00\x00\x00\x00";
+        reader = Reader::new(data.as_slice());
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == TotalSubsongs));
+
+        let data = b"FSB5\x01\x00\x00\x00\x00\x00\x00\x00";
         reader = Reader::new(data.as_slice());
         assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == TotalSubsongs));
 
