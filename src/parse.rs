@@ -31,15 +31,36 @@ impl<R: Read> Reader<R> {
         }
     }
 
+    fn read_to_slice(&mut self, buf: &mut [u8]) -> ParseResult<()> {
+        match self.0.read(buf) {
+            Ok(n) => {
+                let buf_len = buf.len();
+                if n == buf_len {
+                    Ok(())
+                } else {
+                    Err(ParseError::Incomplete(Needed::Size(
+                        NonZeroUsize::new(buf_len - n)
+                            .expect("n is guaranteed to not equal buf_len"),
+                    )))
+                }
+            }
+            Err(e) => match e.kind() {
+                ErrorKind::Interrupted => self.read_to_slice(buf),
+                ErrorKind::UnexpectedEof => Err(ParseError::Incomplete(Needed::Unknown)),
+                _ => Err(ParseError::Failure(e)),
+            },
+        }
+    }
+
     pub(crate) fn take<const LEN: usize>(&mut self) -> ParseResult<[u8; LEN]> {
         let mut buf = [0; LEN];
         Self::read_to_array(self, &mut buf)?;
         Ok(buf)
     }
 
-    #[allow(unused_results)]
-    pub(crate) fn skip<const LEN: usize>(&mut self) -> ParseResult<()> {
-        Self::take::<LEN>(self)?;
+    pub(crate) fn skip(&mut self, amount: usize) -> ParseResult<()> {
+        let mut buf = vec![0u8; amount];
+        Self::read_to_slice(self, buf.as_mut_slice())?;
         Ok(())
     }
 
@@ -146,12 +167,12 @@ mod test {
         let data = b"abc123";
         let mut reader = Reader::new(data.as_slice());
 
-        assert_eq!(reader.skip::<1>(), Ok(()));
-        assert_eq!(reader.skip::<2>(), Ok(()));
-        assert_eq!(reader.skip::<3>(), Ok(()));
-        assert_eq!(reader.skip::<0>(), Ok(()));
+        assert_eq!(reader.skip(1), Ok(()));
+        assert_eq!(reader.skip(2), Ok(()));
+        assert_eq!(reader.skip(3), Ok(()));
+        assert_eq!(reader.skip(0), Ok(()));
         assert_eq!(
-            reader.skip::<1>(),
+            reader.skip(1),
             Err(ParseError::Incomplete(Needed::Size(
                 NonZeroUsize::new(1).unwrap()
             )))
