@@ -60,8 +60,7 @@ impl<R: Read> Reader<R> {
 
     pub(crate) fn skip(&mut self, amount: usize) -> ParseResult<()> {
         let mut buf = vec![0u8; amount];
-        Self::read_to_slice(self, buf.as_mut_slice())?;
-        Ok(())
+        Self::read_to_slice(self, buf.as_mut_slice())
     }
 
     pub(crate) fn u8(&mut self) -> ParseResult<u8> {
