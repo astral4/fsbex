@@ -241,6 +241,7 @@ enum StreamErrorKind {
 }
 
 impl StreamError {
+    #[allow(clippy::new_ret_no_self)]
     fn new(index: u32, kind: StreamErrorKind) -> HeaderError {
         Self {
             index,
@@ -290,9 +291,11 @@ impl Display for StreamError {
 }
 
 impl Error for StreamError {
-    #[allow(trivial_casts)]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        self.source.as_ref().map(|e| e as &dyn Error)
+        match &self.source {
+            Some(source) => Some(source),
+            None => None,
+        }
     }
 }
 
