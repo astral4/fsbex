@@ -1,4 +1,5 @@
 use crate::parse::{ParseError, Reader};
+use bilge::prelude::*;
 use std::{
     error::Error,
     fmt::{Display, Formatter, Result as FmtResult},
@@ -54,35 +55,9 @@ impl Header {
             .map_err(HeaderError::factory(HeaderErrorKind::Metadata))?;
 
         for index in 0..total_subsongs.into() {
-            let sample_mode = reader
-                .le_u64()
-                .map_err(StreamError::factory(index, StreamErrorKind::SampleMode))?;
-
-            let num_samples = (sample_mode >> 34) & 0x3FFF_FFFF;
-
-            let data_offset = ((sample_mode >> 7) & 0x07FF_FFFF) << 5;
-
-            let channels: u8 = match (sample_mode >> 5) & 0x03 {
-                0 => 1,
-                1 => 2,
-                2 => 6,
-                3 => 8,
-                _ => unreachable!(),
-            };
-
-            let sample_rate = match (sample_mode >> 1) & 0x0F {
-                0 => Ok(4000),
-                1 => Ok(8000),
-                2 => Ok(11000),
-                3 => Ok(11025),
-                4 => Ok(16000),
-                5 => Ok(22050),
-                6 => Ok(24000),
-                7 => Ok(32000),
-                8 => Ok(44100),
-                9 => Ok(48000),
-                10 => Ok(96000),
-                _ => Err(StreamError::new(index, StreamErrorKind::SampleRate)),
+            let sample_mode = match reader.le_u64() {
+                Ok(n) => PackedSampleMode::from(n).parse(index),
+                Err(e) => Err(StreamError::new_with_source(index, StreamErrorKind::SampleMode, e)),
             }?;
         }
 
@@ -104,6 +79,73 @@ impl Version {
             1 => Ok(Self::V1),
             _ => Err(HeaderError::new(HeaderErrorKind::Version)),
         }
+    }
+}
+
+#[bitsize(64)]
+#[derive(FromBits)]
+struct PackedSampleMode {
+    has_extra_flags: bool,
+    sample_rate: u5,
+    channels: u2,
+    data_offset: u26,
+    num_samples: u30,
+}
+
+struct SampleMode {
+    has_extra_flags: bool,
+    sample_rate: NonZeroU32,
+    channels: u8,
+    data_offset: NonZeroU32,
+    num_samples: NonZeroU32,
+}
+
+impl PackedSampleMode {
+    fn parse(self, stream_index: u32) -> Result<SampleMode, HeaderError> {
+        let sample_rate = match self.sample_rate().value() {
+            0 => Ok(4000),
+            1 => Ok(8000),
+            2 => Ok(11000),
+            3 => Ok(11025),
+            4 => Ok(16000),
+            5 => Ok(22050),
+            6 => Ok(24000),
+            7 => Ok(32000),
+            8 => Ok(44100),
+            9 => Ok(48000),
+            10 => Ok(96000),
+            _ => Err(StreamError::new(stream_index, StreamErrorKind::SampleRate)),
+        }?
+        .try_into()
+        .unwrap();
+
+        let channels = match self.channels().value() {
+            0 => 1,
+            1 => 2,
+            2 => 6,
+            3 => 8,
+            _ => unreachable!(),
+        };
+
+        let data_offset = self
+            .data_offset()
+            .value()
+            .try_into()
+            .map_err(|_| StreamError::new(stream_index, StreamErrorKind::DataOffset))?;
+
+        let num_samples = self
+            .num_samples()
+            .value()
+            .try_into()
+            .map_err(|_| StreamError::new(stream_index, StreamErrorKind::SampleQuantity))?;
+
+        Ok(SampleMode {
+            has_extra_flags: self.has_extra_flags(),
+            sample_rate,
+            channels,
+            data_offset,
+            num_samples,
+        })
     }
 }
 
@@ -191,6 +233,8 @@ struct StreamError {
 enum StreamErrorKind {
     SampleMode,
     SampleRate,
+    DataOffset,
+    SampleQuantity,
 }
 
 impl StreamError {
@@ -233,7 +277,9 @@ impl Display for StreamError {
 
         match self.kind {
             SampleMode => f.write_str("failed to parse sample mode"),
-            SampleRate => f.write_str("failed to parse sample rate"),
+            SampleRate => f.write_str("invalid sample rate"),
+            DataOffset => f.write_str("sample data offset was 0"),
+            SampleQuantity => f.write_str("number of samples was 0"),
         }?;
 
         f.write_str(&format!(" (stream at index {})", self.index))

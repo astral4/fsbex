@@ -11,3 +11,4 @@ keywords = ["audio", "datamining", "fmod"]
 categories = ["encoding", "multimedia::audio", "multimedia::encoding", "parser-implementations"]
 
 [dependencies]
+bilge = "0.1.5"
