@@ -93,6 +93,7 @@ struct PackedSampleMode {
     num_samples: u30,
 }
 
+#[derive(Debug, PartialEq)]
 struct SampleMode {
     has_extra_flags: bool,
     sample_rate: NonZeroU32,
@@ -301,11 +302,12 @@ mod test {
     use super::{
         Header, HeaderError,
         HeaderErrorKind::*,
-        HeaderErrorSource, PackedSampleMode,
+        HeaderErrorSource, PackedSampleMode, SampleMode,
         StreamErrorKind::{self, *},
         FSB5_MAGIC,
     };
     use crate::parse::Reader;
+    use std::num::NonZeroU32;
 
     #[test]
     fn read_magic() {
@@ -493,5 +495,34 @@ mod test {
 
         let num_samples = (data >> 34) & 0x3FFF_FFFF;
         assert_eq!(u64::from(mode.num_samples().value()), num_samples);
+    }
+
+    #[test]
+    #[allow(clippy::unusual_byte_groupings)]
+    fn parse_sample_mode() {
+        let data = 0b011010000101100111100000001011_111001101101001101000100110_11_1110_0;
+        let mode = PackedSampleMode::from(data);
+        assert!(mode.parse(0).is_err_and(|e| e.is_stream_err_kind(SampleRate)));
+
+        let data = 0b011010000101100111100000001011_000000000000000000000000000_11_0000_0;
+        let mode = PackedSampleMode::from(data);
+        assert!(mode.parse(0).is_err_and(|e| e.is_stream_err_kind(DataOffset)));
+
+        let data = 0b000000000000000000000000000000_111001101101001101000100110_11_0000_0;
+        let mode = PackedSampleMode::from(data);
+        assert!(mode.parse(0).is_err_and(|e| e.is_stream_err_kind(SampleQuantity)));
+
+        let data = 0b000000000000000000000000000001_000000000000000000000000001_01_1000_0;
+        let mode = PackedSampleMode::from(data).parse(0).unwrap();
+        assert_eq!(
+            mode,
+            SampleMode {
+                has_extra_flags: false,
+                sample_rate: NonZeroU32::new(44100).unwrap(),
+                channels: 2,
+                data_offset: NonZeroU32::new(32).unwrap(),
+                num_samples: NonZeroU32::new(1).unwrap()
+            }
+        );
     }
 }
