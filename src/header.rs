@@ -5,6 +5,7 @@ use std::{
     fmt::{Display, Formatter, Result as FmtResult},
     io::Read,
     num::NonZeroU32,
+    ops::Mul,
 };
 
 #[derive(Debug, PartialEq)]
@@ -86,9 +87,9 @@ impl Version {
 #[derive(FromBits)]
 struct PackedSampleMode {
     has_extra_flags: bool,
-    sample_rate: u5,
+    sample_rate: u4,
     channels: u2,
-    data_offset: u26,
+    data_offset: u27,
     num_samples: u30,
 }
 
@@ -130,6 +131,7 @@ impl PackedSampleMode {
         let data_offset = self
             .data_offset()
             .value()
+            .mul(32)
             .try_into()
             .map_err(|_| StreamError::new(stream_index, StreamErrorKind::DataOffset))?;
 
@@ -299,7 +301,7 @@ mod test {
     use super::{
         Header, HeaderError,
         HeaderErrorKind::*,
-        HeaderErrorSource,
+        HeaderErrorSource, PackedSampleMode,
         StreamErrorKind::{self, *},
         FSB5_MAGIC,
     };
@@ -468,7 +470,28 @@ mod test {
         let data = create_data(vec![0; 4]);
         reader = Reader::new(&*data);
         assert!(Header::parse(&mut reader).is_err_and(|e| e.is_stream_err_kind(SampleMode)));
+    }
 
-        // TODO: check that all cases
+    #[test]
+    fn bilge_parsing_works() {
+        #[allow(clippy::unusual_byte_groupings)]
+        let data = 0b011010000101100111100000001011_111001101101001101000100110_11_1110_0;
+
+        let mode = PackedSampleMode::from(data);
+
+        let has_extra_flags = (data & 0x01) == 0x0000_0001;
+        assert_eq!(mode.has_extra_flags(), has_extra_flags);
+
+        let sample_rate_flag = (data >> 1) & 0x0F;
+        assert_eq!(u64::from(mode.sample_rate().value()), sample_rate_flag);
+
+        let channels_flag = (data >> 5) & 0x03;
+        assert_eq!(u64::from(mode.channels().value()), channels_flag);
+
+        let data_offset = ((data >> 7) & 0x07FF_FFFF) << 5;
+        assert_eq!(u64::from(mode.data_offset().value()) * 32, data_offset);
+
+        let num_samples = (data >> 34) & 0x3FFF_FFFF;
+        assert_eq!(u64::from(mode.num_samples().value()), num_samples);
     }
 }
