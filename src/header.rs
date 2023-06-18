@@ -56,10 +56,18 @@ impl Header {
             .map_err(HeaderError::factory(HeaderErrorKind::Metadata))?;
 
         for index in 0..total_subsongs.into() {
-            let sample_mode = match reader.le_u64() {
+            let mode = match reader.le_u64() {
                 Ok(n) => PackedSampleMode::from(n).parse(index),
                 Err(e) => Err(StreamError::new_with_source(index, StreamErrorKind::SampleMode, e)),
             }?;
+
+            if mode.has_extra_flags {
+                let extra_flags: ExtraFlags = reader
+                    .le_u32()
+                    .map_err(StreamError::factory(index, StreamErrorKind::ExtraFlags))?
+                    .try_into()
+                    .map_err(|_| StreamError::new(index, StreamErrorKind::UnknownFlagType))?;
+            }
         }
 
         todo!()
@@ -152,6 +160,31 @@ impl PackedSampleMode {
     }
 }
 
+#[bitsize(32)]
+#[derive(TryFromBits)]
+struct ExtraFlags {
+    end: bool,
+    size: u24,
+    kind: ExtraFlagsKind,
+}
+
+#[bitsize(7)]
+#[derive(TryFromBits)]
+enum ExtraFlagsKind {
+    Channels = 0x01,
+    SampleRate = 0x02,
+    Loop = 0x03,
+    Comment = 0x04,
+    XmaSeekTable = 0x06,
+    DspCoefficients = 0x07,
+    Atrac9Config = 0x09,
+    XwmaConfig = 0x0a,
+    VorbisSeekTable = 0x0b,
+    PeakVolume = 0x0d,
+    VorbisIntraLayers = 0x0e,
+    OpusDataSize = 0x0f,
+}
+
 #[derive(Debug)]
 struct HeaderError {
     kind: HeaderErrorKind,
@@ -238,6 +271,8 @@ enum StreamErrorKind {
     SampleRate,
     DataOffset,
     SampleQuantity,
+    ExtraFlags,
+    UnknownFlagType,
 }
 
 impl StreamError {
@@ -284,6 +319,8 @@ impl Display for StreamError {
             SampleRate => f.write_str("invalid sample rate"),
             DataOffset => f.write_str("sample data offset was 0"),
             SampleQuantity => f.write_str("number of samples was 0"),
+            ExtraFlags => f.write_str("failed to read extra flags"),
+            UnknownFlagType => f.write_str("type of extra flag was not recognized"),
         }?;
 
         f.write_str(&format!(" (stream at index {})", self.index))
@@ -303,7 +340,7 @@ impl Error for StreamError {
 mod test {
     #[allow(clippy::enum_glob_use)]
     use super::{
-        Header, HeaderError,
+        ExtraFlags, Header, HeaderError,
         HeaderErrorKind::*,
         HeaderErrorSource, PackedSampleMode, SampleMode,
         StreamErrorKind::{self, *},
@@ -458,33 +495,21 @@ mod test {
         assert!(Header::parse(&mut reader).is_err_and(|e| e.is_stream_err_kind(SampleMode)));
     }
 
-    const BASE_HEADER: [u8; 64] =
-        *b"FSB5\x01\x00\x00\x00\x01\x00\x00\x000000000000000000000000000000000000000000000000000000";
-
-    fn create_data(bytes: Vec<u8>) -> Vec<u8> {
-        let mut bytes = bytes;
-        let mut buf = Vec::from(BASE_HEADER);
-        buf.append(&mut bytes);
-        buf
-    }
-
     #[test]
     fn read_stream_mode() {
-        let mut reader;
-
-        let data = create_data(vec![0; 4]);
-        reader = Reader::new(&*data);
+        let data = b"FSB5\x01\x00\x00\x00\x01\x00\x00\x0000000000000000000000000000000000000000000000000000000000";
+        let mut reader = Reader::new(data.as_slice());
         assert!(Header::parse(&mut reader).is_err_and(|e| e.is_stream_err_kind(SampleMode)));
     }
 
     #[test]
-    fn bilge_parsing_works() {
+    fn derived_sample_mode_parsing_works() {
         #[allow(clippy::unusual_byte_groupings)]
         let data = 0b011010000101100111100000001011_111001101101001101000100110_11_1110_0;
 
         let mode = PackedSampleMode::from(data);
 
-        let has_extra_flags = (data & 0x01) == 0x0000_0001;
+        let has_extra_flags = (data & 0x01) == 1;
         assert_eq!(mode.has_extra_flags(), has_extra_flags);
 
         let sample_rate_flag = (data >> 1) & 0x0F;
@@ -527,5 +552,55 @@ mod test {
                 num_samples: NonZeroU32::new(1).unwrap()
             }
         );
+    }
+
+    #[test]
+    fn derived_extra_flags_parsing_works() {
+        #[allow(clippy::unusual_byte_groupings)]
+        let data = 0b0001101_100001101110000000011001_0;
+
+        let flags = ExtraFlags::try_from(data).unwrap();
+
+        let end = (data & 0x01) == 1;
+        assert_eq!(flags.end(), end);
+
+        let size = (data >> 1) & 0x00FF_FFFF;
+        assert_eq!(flags.size().value(), size);
+
+        let kind = (data >> 25) & 0x7F;
+        assert_eq!(flags.kind() as u32, kind);
+    }
+
+    #[test]
+    fn parse_extra_flags() {
+        const DATA: &[u8; 72] = b"FSB5\x01\x00\x00\x00\x01\x00\x00\x000000000000000000000000000000000000000000000000000000\x010000000";
+
+        let mut reader;
+
+        reader = Reader::new(DATA.as_slice());
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.is_stream_err_kind(ExtraFlags)));
+
+        #[allow(clippy::items_after_statements)]
+        fn test_invalid_flag(kind: u8) {
+            let flag = u32::from(kind);
+            assert!(ExtraFlags::try_from(flag).is_err());
+
+            let full = {
+                let mut buf = Vec::from(*DATA);
+                buf.append(flag.to_le_bytes().to_vec().as_mut());
+                buf
+            };
+            let mut reader = Reader::new(full.as_slice());
+            assert!(
+                Header::parse(&mut reader).is_err_and(|e| e.is_stream_err_kind(UnknownFlagType))
+            );
+        }
+
+        for flag in [0, 5, 8, 12] {
+            test_invalid_flag(flag);
+        }
+        for flag in 16..128 {
+            test_invalid_flag(flag);
+        }
     }
 }
