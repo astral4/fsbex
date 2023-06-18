@@ -11,38 +11,42 @@ struct Header {}
 
 impl Header {
     fn parse<R: Read>(reader: &mut Reader<R>) -> Result<Self, HeaderError> {
-        #[allow(clippy::enum_glob_use)]
-        use {HeaderErrorKind::*, StreamErrorKind::*};
-
         match reader.take() {
             Ok(data) if data == FSB5_MAGIC => Ok(()),
-            Err(e) => Err(HeaderError::new_with_source(Magic, e)),
-            _ => Err(HeaderError::new(Magic)),
+            Err(e) => Err(HeaderError::new_with_source(HeaderErrorKind::Magic, e)),
+            _ => Err(HeaderError::new(HeaderErrorKind::Magic)),
         }?;
 
         let version = match reader.le_u32() {
             Ok(n) => Version::parse(n),
-            Err(e) => Err(HeaderError::new_with_source(FormatVersion, e)),
+            Err(e) => Err(HeaderError::new_with_source(HeaderErrorKind::Version, e)),
         }?;
 
         let total_subsongs = match reader.le_u32() {
-            Ok(n) => NonZeroU32::new(n).ok_or_else(|| HeaderError::new(TotalSubsongs)),
-            Err(e) => Err(HeaderError::new_with_source(TotalSubsongs, e)),
+            Ok(n) => {
+                NonZeroU32::new(n).ok_or_else(|| HeaderError::new(HeaderErrorKind::TotalSubsongs))
+            }
+            Err(e) => Err(HeaderError::new_with_source(
+                HeaderErrorKind::TotalSubsongs,
+                e,
+            )),
         }?;
 
         let sample_header_size = reader
             .le_u32()
-            .map_err(HeaderError::factory(SampleHeaderSize))?;
+            .map_err(HeaderError::factory(HeaderErrorKind::SampleHeaderSize))?;
 
         let name_table_size = reader
             .le_u32()
-            .map_err(HeaderError::factory(NameTableSize))?;
+            .map_err(HeaderError::factory(HeaderErrorKind::NameTableSize))?;
 
         let sample_data_size = reader
             .le_u32()
-            .map_err(HeaderError::factory(SampleDataSize))?;
+            .map_err(HeaderError::factory(HeaderErrorKind::SampleDataSize))?;
 
-        let codec = reader.le_u32().map_err(HeaderError::factory(Codec))?;
+        let codec = reader
+            .le_u32()
+            .map_err(HeaderError::factory(HeaderErrorKind::Codec))?;
 
         let base_header_size = match version {
             Version::V0 => 60,
@@ -51,12 +55,12 @@ impl Header {
 
         reader
             .skip((base_header_size - 28).try_into().unwrap())
-            .map_err(HeaderError::factory(Metadata))?;
+            .map_err(HeaderError::factory(HeaderErrorKind::Metadata))?;
 
         for index in 0..total_subsongs.into() {
             let sample_mode = reader
                 .le_u64()
-                .map_err(StreamError::factory(index, SampleMode))?;
+                .map_err(StreamError::factory(index, StreamErrorKind::SampleMode))?;
 
             let num_samples = (sample_mode >> 34) & 0x3FFF_FFFF;
 
@@ -82,7 +86,7 @@ impl Header {
                 8 => Ok(44100),
                 9 => Ok(48000),
                 10 => Ok(96000),
-                _ => Err(StreamError::new(index, SampleRate)),
+                _ => Err(StreamError::new(index, StreamErrorKind::SampleRate)),
             }?;
         }
 
@@ -102,7 +106,7 @@ impl Version {
         match num {
             0 => Ok(Self::V0),
             1 => Ok(Self::V1),
-            _ => Err(HeaderError::new(HeaderErrorKind::FormatVersion)),
+            _ => Err(HeaderError::new(HeaderErrorKind::Version)),
         }
     }
 }
@@ -116,7 +120,7 @@ struct HeaderError {
 #[derive(Debug, PartialEq)]
 enum HeaderErrorKind {
     Magic,
-    FormatVersion,
+    Version,
     TotalSubsongs,
     SampleHeaderSize,
     NameTableSize,
@@ -156,7 +160,7 @@ impl Display for HeaderError {
 
         match self.kind {
             Magic => f.write_str("no file signature found"),
-            FormatVersion => f.write_str("invalid file format version"),
+            Version => f.write_str("invalid file format version"),
             TotalSubsongs => f.write_str("invalid number of subsongs"),
             SampleHeaderSize => f.write_str("failed to parse size of sample header"),
             NameTableSize => f.write_str("failed to parse size of name table"),
@@ -270,7 +274,7 @@ mod test {
         assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == Magic));
 
         reader = Reader::new(FSB5_MAGIC.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == FormatVersion));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == Version));
     }
 
     #[test]
@@ -279,11 +283,11 @@ mod test {
 
         let data = b"FSB5\x00";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == FormatVersion));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == Version));
 
         let data = b"FSB5\xFF\x00\x00\x00";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == FormatVersion));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == Version));
 
         let data = b"FSB5\x01\x00\x00\x00";
         reader = Reader::new(data.as_slice());
