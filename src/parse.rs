@@ -118,9 +118,9 @@ impl Display for ParseError {
         match self {
             Self::Failure(_) => f.write_str("failed to parse data due to I/O error"),
             Self::Incomplete(needed) => match needed {
-                Needed::Size(size) => f.write_str(&format!(
-                    "incomplete data: needed {size} more bytes to parse"
-                )),
+                Needed::Size(size) => {
+                    f.write_str(&format!("incomplete data: needed {size} more bytes to parse"))
+                }
                 Needed::Unknown => f.write_str("incomplete data"),
             },
         }
@@ -155,9 +155,7 @@ mod test {
         assert_eq!(reader.take(), Ok([]));
         assert_eq!(
             reader.take::<1>(),
-            Err(ParseError::Incomplete(Needed::Size(
-                NonZeroUsize::new(1).unwrap()
-            )))
+            Err(ParseError::Incomplete(Needed::Size(NonZeroUsize::new(1).unwrap())))
         );
     }
 
@@ -172,9 +170,7 @@ mod test {
         assert_eq!(reader.skip(0), Ok(()));
         assert_eq!(
             reader.skip(1),
-            Err(ParseError::Incomplete(Needed::Size(
-                NonZeroUsize::new(1).unwrap()
-            )))
+            Err(ParseError::Incomplete(Needed::Size(NonZeroUsize::new(1).unwrap())))
         );
     }
 
@@ -215,9 +211,7 @@ mod test {
 
         assert_eq!(
             reader.le_u32(),
-            Err(ParseError::Incomplete(Needed::Size(
-                NonZeroUsize::new(2).unwrap()
-            )))
+            Err(ParseError::Incomplete(Needed::Size(NonZeroUsize::new(2).unwrap())))
         );
     }
 
