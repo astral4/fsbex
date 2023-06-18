@@ -70,7 +70,7 @@ impl Header {
                 _ => unreachable!(),
             };
 
-            let sample_rate = match (sample_mode >> 1) & 0x0f {
+            let sample_rate = match (sample_mode >> 1) & 0x0F {
                 0 => Ok(4000),
                 1 => Ok(8000),
                 2 => Ok(11000),
@@ -187,7 +187,7 @@ struct StreamError {
     source: Option<ParseError>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum StreamErrorKind {
     SampleMode,
     SampleRate,
@@ -250,7 +250,13 @@ impl Error for StreamError {
 #[cfg(test)]
 mod test {
     #[allow(clippy::enum_glob_use)]
-    use super::{Header, HeaderErrorKind::*, FSB5_MAGIC};
+    use super::{
+        Header, HeaderError,
+        HeaderErrorKind::*,
+        HeaderErrorSource,
+        StreamErrorKind::{self, *},
+        FSB5_MAGIC,
+    };
     use crate::parse::Reader;
 
     #[test]
@@ -353,6 +359,16 @@ mod test {
         assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == Metadata));
     }
 
+    impl HeaderError {
+        #[allow(clippy::needless_pass_by_value)]
+        fn is_stream_err_kind(&self, kind: StreamErrorKind) -> bool {
+            match &self.source {
+                Some(HeaderErrorSource::Stream(e)) => e.kind == kind,
+                _ => false,
+            }
+        }
+    }
+
     #[test]
     fn read_metadata() {
         const V0_HEADER_BASE: [u8; 12] = *b"FSB5\x00\x00\x00\x000000";
@@ -378,7 +394,7 @@ mod test {
             buf
         };
         reader = Reader::new(&ok_v0_data);
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == Stream));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.is_stream_err_kind(SampleMode)));
 
         let ok_v1_data = {
             let mut buf = Vec::from(V1_HEADER_BASE);
@@ -386,6 +402,27 @@ mod test {
             buf
         };
         reader = Reader::new(&ok_v1_data);
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == Stream));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.is_stream_err_kind(SampleMode)));
+    }
+
+    const BASE_HEADER: [u8; 64] =
+        *b"FSB5\x01\x00\x00\x00\x01\x00\x00\x000000000000000000000000000000000000000000000000000000";
+
+    fn create_data(bytes: Vec<u8>) -> Vec<u8> {
+        let mut bytes = bytes;
+        let mut buf = Vec::from(BASE_HEADER);
+        buf.append(&mut bytes);
+        buf
+    }
+
+    #[test]
+    fn read_stream_mode() {
+        let mut reader;
+
+        let data = create_data(vec![0; 4]);
+        reader = Reader::new(&*data);
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.is_stream_err_kind(SampleMode)));
+
+        // TODO: check that all cases
     }
 }
