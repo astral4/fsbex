@@ -17,20 +17,16 @@ impl Header {
             _ => Err(HeaderError::new(HeaderErrorKind::Magic)),
         }?;
 
-        let version = match reader.le_u32() {
-            Ok(n) => Version::parse(n),
-            Err(e) => Err(HeaderError::new_with_source(HeaderErrorKind::Version, e)),
-        }?;
+        let version = reader
+            .le_u32()
+            .map_err(HeaderError::factory(HeaderErrorKind::Version))
+            .and_then(Version::parse)?;
 
-        let total_subsongs = match reader.le_u32() {
-            Ok(n) => {
-                NonZeroU32::new(n).ok_or_else(|| HeaderError::new(HeaderErrorKind::TotalSubsongs))
-            }
-            Err(e) => Err(HeaderError::new_with_source(
-                HeaderErrorKind::TotalSubsongs,
-                e,
-            )),
-        }?;
+        let total_subsongs: NonZeroU32 = reader
+            .le_u32()
+            .map_err(HeaderError::factory(HeaderErrorKind::TotalSubsongs))?
+            .try_into()
+            .map_err(|_| HeaderError::new(HeaderErrorKind::TotalSubsongs))?;
 
         let sample_header_size = reader
             .le_u32()
