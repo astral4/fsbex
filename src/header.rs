@@ -28,7 +28,7 @@ impl Header {
             .le_u32()
             .map_err(HeaderError::factory(HeaderErrorKind::TotalSubsongs))?
             .try_into()
-            .map_err(|_| HeaderError::new(HeaderErrorKind::TotalSubsongs))?;
+            .map_err(|_| HeaderError::new(HeaderErrorKind::NoSubsongs))?;
 
         let sample_header_size = reader
             .le_u32()
@@ -87,7 +87,7 @@ impl Version {
         match num {
             0 => Ok(Self::V0),
             1 => Ok(Self::V1),
-            _ => Err(HeaderError::new(HeaderErrorKind::Version)),
+            version => Err(HeaderError::new(HeaderErrorKind::UnknownVersion { version })),
         }
     }
 }
@@ -232,7 +232,9 @@ struct HeaderError {
 enum HeaderErrorKind {
     Magic,
     Version,
+    UnknownVersion { version: u32 },
     TotalSubsongs,
+    NoSubsongs,
     SampleHeaderSize,
     NameTableSize,
     SampleDataSize,
@@ -271,11 +273,15 @@ impl Display for HeaderError {
 
         match self.kind {
             Magic => f.write_str("no file signature found"),
-            Version => f.write_str("invalid file format version"),
-            TotalSubsongs => f.write_str("invalid number of subsongs"),
-            SampleHeaderSize => f.write_str("failed to parse size of sample header"),
-            NameTableSize => f.write_str("failed to parse size of name table"),
-            SampleDataSize => f.write_str("failed to parse size of sample data"),
+            Version => f.write_str("failed to read file format version"),
+            UnknownVersion { version } => {
+                f.write_str(&format!("file format version was not recognized (0x{version:08x})"))
+            }
+            TotalSubsongs => f.write_str("failed to read number of subsongs"),
+            NoSubsongs => f.write_str("number of subsongs was 0"),
+            SampleHeaderSize => f.write_str("failed to read size of sample header"),
+            NameTableSize => f.write_str("failed to read size of name table"),
+            SampleDataSize => f.write_str("failed to read size of sample data"),
             Codec => f.write_str("failed to parse codec"),
             Metadata => f.write_str("failed to read (unused) metadata bytes"),
             Stream => f.write_str("failed to parse stream header"),
@@ -354,13 +360,13 @@ impl Display for StreamError {
         match self.kind {
             SampleMode => f.write_str("failed to parse sample mode"),
             SampleRate { flag } => {
-                f.write_str(&format!("sample rate flag was not recognized (0x{flag:x})"))
+                f.write_str(&format!("sample rate flag was not recognized (0x{flag:02x})"))
             }
             DataOffset => f.write_str("sample data offset was 0"),
             SampleQuantity => f.write_str("number of samples was 0"),
             ExtraFlags => f.write_str("failed to read extra flags"),
             UnknownFlagType { flag } => {
-                f.write_str(&format!("type of extra flag was not recognized (0x{flag:x})"))
+                f.write_str(&format!("type of extra flag was not recognized (0x{flag:02x})"))
             }
         }?;
 
@@ -414,9 +420,11 @@ mod test {
 
         let data = b"FSB5\xFF\x00\x00\x00";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == Version));
+        assert!(
+            Header::parse(&mut reader).is_err_and(|e| e.kind == UnknownVersion { version: 0xFF })
+        );
 
-        let data = b"FSB5\x01\x00\x00\x00";
+        let data = b"FSB5\x00\x00\x00\x00";
         reader = Reader::new(data.as_slice());
         assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == TotalSubsongs));
     }
@@ -431,7 +439,7 @@ mod test {
 
         let data = b"FSB5\x01\x00\x00\x00\x00\x00\x00\x00";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == TotalSubsongs));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == NoSubsongs));
 
         let data = b"FSB5\x01\x00\x00\x00\x00\x00\xFF\xFF";
         reader = Reader::new(data.as_slice());
