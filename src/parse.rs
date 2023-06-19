@@ -5,16 +5,24 @@ use std::{
     num::NonZeroUsize,
 };
 
-pub(crate) struct Reader<R: Read>(R);
+pub(crate) struct Reader<R: Read> {
+    inner: R,
+    position: usize,
+}
 
 impl<R: Read> Reader<R> {
     pub(crate) fn new(reader: R) -> Self {
-        Self(reader)
+        Self {
+            inner: reader,
+            position: 0,
+        }
     }
 
     fn read_to_array<const LEN: usize>(&mut self, buf: &mut [u8; LEN]) -> ParseResult<()> {
-        match self.0.read(buf) {
+        match self.inner.read(buf) {
             Ok(n) => {
+                self.position += n;
+
                 if n == LEN {
                     Ok(())
                 } else {
@@ -32,9 +40,11 @@ impl<R: Read> Reader<R> {
     }
 
     fn read_to_slice(&mut self, buf: &mut [u8]) -> ParseResult<()> {
-        match self.0.read(buf) {
+        match self.inner.read(buf) {
             Ok(n) => {
+                self.position += n;
                 let buf_len = buf.len();
+
                 if n == buf_len {
                     Ok(())
                 } else {
@@ -52,6 +62,10 @@ impl<R: Read> Reader<R> {
         }
     }
 
+    fn position(&self) -> usize {
+        self.position
+    }
+
     pub(crate) fn take<const LEN: usize>(&mut self) -> ParseResult<[u8; LEN]> {
         let mut buf = [0; LEN];
         Self::read_to_array(self, &mut buf)?;
@@ -61,6 +75,10 @@ impl<R: Read> Reader<R> {
     pub(crate) fn skip(&mut self, amount: usize) -> ParseResult<()> {
         let mut buf = vec![0u8; amount];
         Self::read_to_slice(self, buf.as_mut_slice())
+    }
+
+    pub(crate) fn advance_to(&mut self, position: usize) -> ParseResult<()> {
+        self.skip(position - self.position)
     }
 
     pub(crate) fn u8(&mut self) -> ParseResult<u8> {
@@ -171,6 +189,26 @@ mod test {
         assert_eq!(
             reader.skip(1),
             Err(ParseError::Incomplete(Needed::Size(NonZeroUsize::new(1).unwrap())))
+        );
+    }
+
+    #[test]
+    fn advance_to_position() {
+        let data = b"abc123";
+        let mut reader = Reader::new(data.as_slice());
+
+        assert_eq!(reader.advance_to(0), Ok(()));
+        assert_eq!(reader.position(), 0);
+
+        assert_eq!(reader.advance_to(2), Ok(()));
+        assert_eq!(reader.position(), 2);
+
+        assert_eq!(reader.advance_to(6), Ok(()));
+        assert_eq!(reader.position(), 6);
+
+        assert_eq!(
+            reader.advance_to(10),
+            Err(ParseError::Incomplete(Needed::Size(NonZeroUsize::new(4).unwrap())))
         );
     }
 
