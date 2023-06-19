@@ -66,7 +66,14 @@ impl Header {
                     .le_u32()
                     .map_err(StreamError::factory(index, StreamErrorKind::ExtraFlags))?
                     .try_into()
-                    .map_err(|_| StreamError::new(index, StreamErrorKind::UnknownFlagType))?;
+                    .map_err(|n| {
+                        StreamError::new(
+                            index,
+                            StreamErrorKind::UnknownFlagType {
+                                flag: ((n >> 25) & 127u32) as u8,
+                            },
+                        )
+                    })?;
             }
         }
 
@@ -124,7 +131,7 @@ impl PackedSampleMode {
             8 => Ok(44100),
             9 => Ok(48000),
             10 => Ok(96000),
-            _ => Err(StreamError::new(stream_index, StreamErrorKind::SampleRate)),
+            flag => Err(StreamError::new(stream_index, StreamErrorKind::SampleRate { flag })),
         }?
         .try_into()
         .unwrap();
@@ -268,11 +275,11 @@ struct StreamError {
 #[derive(Debug, PartialEq)]
 enum StreamErrorKind {
     SampleMode,
-    SampleRate,
+    SampleRate { flag: u8 },
     DataOffset,
     SampleQuantity,
     ExtraFlags,
-    UnknownFlagType,
+    UnknownFlagType { flag: u8 },
 }
 
 impl StreamError {
@@ -316,11 +323,15 @@ impl Display for StreamError {
 
         match self.kind {
             SampleMode => f.write_str("failed to parse sample mode"),
-            SampleRate => f.write_str("invalid sample rate"),
+            SampleRate { flag } => {
+                f.write_str(&format!("sample rate flag was not recognized (0x{flag:x})"))
+            }
             DataOffset => f.write_str("sample data offset was 0"),
             SampleQuantity => f.write_str("number of samples was 0"),
             ExtraFlags => f.write_str("failed to read extra flags"),
-            UnknownFlagType => f.write_str("type of extra flag was not recognized"),
+            UnknownFlagType { flag } => {
+                f.write_str(&format!("type of extra flag was not recognized (0x{flag:x})"))
+            }
         }?;
 
         f.write_str(&format!(" (stream at index {})", self.index))
@@ -530,7 +541,9 @@ mod test {
     fn parse_sample_mode() {
         let data = 0b011010000101100111100000001011_111001101101001101000100110_11_1110_0;
         let mode = PackedSampleMode::from(data);
-        assert!(mode.parse(0).is_err_and(|e| e.is_stream_err_kind(SampleRate)));
+        assert!(mode
+            .parse(0)
+            .is_err_and(|e| e.is_stream_err_kind(SampleRate { flag: 0b1110 })));
 
         let data = 0b011010000101100111100000001011_000000000000000000000000000_11_0000_0;
         let mode = PackedSampleMode::from(data);
@@ -582,7 +595,7 @@ mod test {
 
         #[allow(clippy::items_after_statements)]
         fn test_invalid_flag(kind: u8) {
-            let flag = u32::from(kind);
+            let flag = u32::from(kind).swap_bytes() << 1;
             assert!(ExtraFlags::try_from(flag).is_err());
 
             let full = {
@@ -591,9 +604,8 @@ mod test {
                 buf
             };
             let mut reader = Reader::new(full.as_slice());
-            assert!(
-                Header::parse(&mut reader).is_err_and(|e| e.is_stream_err_kind(UnknownFlagType))
-            );
+            assert!(Header::parse(&mut reader)
+                .is_err_and(|e| e.is_stream_err_kind(UnknownFlagType { flag: kind })));
         }
 
         for flag in [0, 5, 8, 12] {
