@@ -57,23 +57,17 @@ impl Header {
 
         for index in 0..total_subsongs.into() {
             let mode = match reader.le_u64() {
-                Ok(n) => PackedSampleMode::from(n).parse(index),
+                Ok(n) => RawSampleMode::from(n).parse(index),
                 Err(e) => Err(StreamError::new_with_source(index, StreamErrorKind::SampleMode, e)),
             }?;
 
             if mode.has_extra_flags {
-                let extra_flags: ExtraFlags = reader
-                    .le_u32()
-                    .map_err(StreamError::factory(index, StreamErrorKind::ExtraFlags))?
-                    .try_into()
-                    .map_err(|n| {
-                        StreamError::new(
-                            index,
-                            StreamErrorKind::UnknownFlagType {
-                                flag: ((n >> 25) & 127u32) as u8,
-                            },
-                        )
-                    })?;
+                let extra_flags = match reader.le_u32() {
+                    Ok(n) => RawExtraFlags::from(n).parse(index),
+                    Err(e) => {
+                        Err(StreamError::new_with_source(index, StreamErrorKind::ExtraFlags, e))
+                    }
+                }?;
             }
         }
 
@@ -100,7 +94,7 @@ impl Version {
 
 #[bitsize(64)]
 #[derive(FromBits)]
-struct PackedSampleMode {
+struct RawSampleMode {
     has_extra_flags: bool,
     sample_rate: u4,
     channels: u2,
@@ -117,7 +111,7 @@ struct SampleMode {
     num_samples: NonZeroU32,
 }
 
-impl PackedSampleMode {
+impl RawSampleMode {
     fn parse(self, stream_index: u32) -> Result<SampleMode, HeaderError> {
         let sample_rate = match self.sample_rate().value() {
             0 => Ok(4000),
@@ -168,15 +162,19 @@ impl PackedSampleMode {
 }
 
 #[bitsize(32)]
-#[derive(TryFromBits)]
-struct ExtraFlags {
+#[derive(FromBits)]
+struct RawExtraFlags {
     end: bool,
     size: u24,
+    kind: u7,
+}
+
+struct ExtraFlags {
+    end: bool,
+    size: u32,
     kind: ExtraFlagsKind,
 }
 
-#[bitsize(7)]
-#[derive(TryFromBits)]
 enum ExtraFlagsKind {
     Channels = 0x01,
     SampleRate = 0x02,
@@ -190,6 +188,38 @@ enum ExtraFlagsKind {
     PeakVolume = 0x0d,
     VorbisIntraLayers = 0x0e,
     OpusDataSize = 0x0f,
+}
+
+impl RawExtraFlags {
+    fn parse(self, stream_index: u32) -> Result<ExtraFlags, HeaderError> {
+        #[allow(clippy::enum_glob_use)]
+        use ExtraFlagsKind::*;
+
+        let kind = match self.kind().value() {
+            1 => Ok(Channels),
+            2 => Ok(SampleRate),
+            3 => Ok(Loop),
+            4 => Ok(Comment),
+            6 => Ok(XmaSeekTable),
+            7 => Ok(DspCoefficients),
+            9 => Ok(Atrac9Config),
+            10 => Ok(XwmaConfig),
+            11 => Ok(VorbisSeekTable),
+            13 => Ok(PeakVolume),
+            14 => Ok(VorbisIntraLayers),
+            15 => Ok(OpusDataSize),
+            flag => Err(StreamError::new(
+                stream_index,
+                StreamErrorKind::UnknownFlagType { flag },
+            )),
+        }?;
+
+        Ok(ExtraFlags {
+            end: self.end(),
+            size: self.size().value(),
+            kind,
+        })
+    }
 }
 
 #[derive(Debug)]
@@ -351,9 +381,9 @@ impl Error for StreamError {
 mod test {
     #[allow(clippy::enum_glob_use)]
     use super::{
-        ExtraFlags, Header, HeaderError,
+        Header, HeaderError,
         HeaderErrorKind::*,
-        HeaderErrorSource, PackedSampleMode, SampleMode,
+        HeaderErrorSource, RawExtraFlags, RawSampleMode, SampleMode,
         StreamErrorKind::{self, *},
         FSB5_MAGIC,
     };
@@ -518,7 +548,7 @@ mod test {
         #[allow(clippy::unusual_byte_groupings)]
         let data = 0b011010000101100111100000001011_111001101101001101000100110_11_1110_0;
 
-        let mode = PackedSampleMode::from(data);
+        let mode = RawSampleMode::from(data);
 
         let has_extra_flags = (data & 0x01) == 1;
         assert_eq!(mode.has_extra_flags(), has_extra_flags);
@@ -540,21 +570,21 @@ mod test {
     #[allow(clippy::unusual_byte_groupings)]
     fn parse_sample_mode() {
         let data = 0b011010000101100111100000001011_111001101101001101000100110_11_1110_0;
-        let mode = PackedSampleMode::from(data);
+        let mode = RawSampleMode::from(data);
         assert!(mode
             .parse(0)
             .is_err_and(|e| e.is_stream_err_kind(SampleRate { flag: 0b1110 })));
 
         let data = 0b011010000101100111100000001011_000000000000000000000000000_11_0000_0;
-        let mode = PackedSampleMode::from(data);
+        let mode = RawSampleMode::from(data);
         assert!(mode.parse(0).is_err_and(|e| e.is_stream_err_kind(DataOffset)));
 
         let data = 0b000000000000000000000000000000_111001101101001101000100110_11_0000_0;
-        let mode = PackedSampleMode::from(data);
+        let mode = RawSampleMode::from(data);
         assert!(mode.parse(0).is_err_and(|e| e.is_stream_err_kind(SampleQuantity)));
 
         let data = 0b000000000000000000000000000001_000000000000000000000000001_01_1000_0;
-        let mode = PackedSampleMode::from(data).parse(0).unwrap();
+        let mode = RawSampleMode::from(data).parse(0).unwrap();
         assert_eq!(
             mode,
             SampleMode {
@@ -572,16 +602,16 @@ mod test {
         #[allow(clippy::unusual_byte_groupings)]
         let data = 0b0001101_100001101110000000011001_0;
 
-        let flags = ExtraFlags::try_from(data).unwrap();
+        let flags = RawExtraFlags::from(data).parse(0).unwrap();
 
         let end = (data & 0x01) == 1;
-        assert_eq!(flags.end(), end);
+        assert_eq!(flags.end, end);
 
         let size = (data >> 1) & 0x00FF_FFFF;
-        assert_eq!(flags.size().value(), size);
+        assert_eq!(flags.size, size);
 
         let kind = (data >> 25) & 0x7F;
-        assert_eq!(flags.kind() as u32, kind);
+        assert_eq!(flags.kind as u32, kind);
     }
 
     #[test]
@@ -596,7 +626,7 @@ mod test {
         #[allow(clippy::items_after_statements)]
         fn test_invalid_flag(kind: u8) {
             let flag = u32::from(kind).swap_bytes() << 1;
-            assert!(ExtraFlags::try_from(flag).is_err());
+            assert!(RawExtraFlags::from(flag).parse(0).is_err());
 
             let full = {
                 let mut buf = Vec::from(*DATA);
