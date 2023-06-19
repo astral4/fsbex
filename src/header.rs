@@ -176,18 +176,18 @@ struct ExtraFlags {
 }
 
 enum ExtraFlagsKind {
-    Channels = 0x01,
-    SampleRate = 0x02,
-    Loop = 0x03,
-    Comment = 0x04,
-    XmaSeekTable = 0x06,
-    DspCoefficients = 0x07,
-    Atrac9Config = 0x09,
-    XwmaConfig = 0x0a,
-    VorbisSeekTable = 0x0b,
-    PeakVolume = 0x0d,
-    VorbisIntraLayers = 0x0e,
-    OpusDataSize = 0x0f,
+    Channels,
+    SampleRate,
+    Loop,
+    Comment,
+    XmaSeekTable,
+    DspCoefficients,
+    Atrac9Config,
+    XwmaConfig,
+    VorbisSeekTable,
+    PeakVolume,
+    VorbisIntraLayers,
+    OpusDataSize,
 }
 
 impl RawExtraFlags {
@@ -602,16 +602,16 @@ mod test {
         #[allow(clippy::unusual_byte_groupings)]
         let data = 0b0001101_100001101110000000011001_0;
 
-        let flags = RawExtraFlags::from(data).parse(0).unwrap();
+        let flags = RawExtraFlags::from(data);
 
         let end = (data & 0x01) == 1;
-        assert_eq!(flags.end, end);
+        assert_eq!(flags.end(), end);
 
         let size = (data >> 1) & 0x00FF_FFFF;
-        assert_eq!(flags.size, size);
+        assert_eq!(flags.size().value(), size);
 
         let kind = (data >> 25) & 0x7F;
-        assert_eq!(flags.kind as u32, kind);
+        assert_eq!(u32::from(flags.kind().value()), kind);
     }
 
     #[test]
