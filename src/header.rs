@@ -1,4 +1,4 @@
-use crate::parse::{ParseError, Reader};
+use crate::read::{ReadError, Reader};
 use bilge::prelude::*;
 use std::{
     error::Error,
@@ -248,7 +248,7 @@ enum HeaderErrorKind {
 
 #[derive(Debug)]
 enum HeaderErrorSource {
-    Parse(ParseError),
+    Read(ReadError),
     Stream(StreamError),
 }
 
@@ -257,14 +257,14 @@ impl HeaderError {
         Self { kind, source: None }
     }
 
-    fn new_with_source(kind: HeaderErrorKind, source: ParseError) -> Self {
+    fn new_with_source(kind: HeaderErrorKind, source: ReadError) -> Self {
         Self {
             kind,
-            source: Some(HeaderErrorSource::Parse(source)),
+            source: Some(HeaderErrorSource::Read(source)),
         }
     }
 
-    fn factory(kind: HeaderErrorKind) -> impl FnOnce(ParseError) -> Self {
+    fn factory(kind: HeaderErrorKind) -> impl FnOnce(ReadError) -> Self {
         |source| Self::new_with_source(kind, source)
     }
 }
@@ -296,7 +296,7 @@ impl Error for HeaderError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match &self.source {
             Some(source) => match source {
-                HeaderErrorSource::Parse(e) => Some(e),
+                HeaderErrorSource::Read(e) => Some(e),
                 HeaderErrorSource::Stream(e) => Some(e),
             },
             None => None,
@@ -308,7 +308,7 @@ impl Error for HeaderError {
 struct StreamError {
     index: u32,
     kind: StreamErrorKind,
-    source: Option<ParseError>,
+    source: Option<ReadError>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -332,7 +332,7 @@ impl StreamError {
         .into()
     }
 
-    fn new_with_source(index: u32, kind: StreamErrorKind, source: ParseError) -> HeaderError {
+    fn new_with_source(index: u32, kind: StreamErrorKind, source: ReadError) -> HeaderError {
         Self {
             index,
             kind,
@@ -341,7 +341,7 @@ impl StreamError {
         .into()
     }
 
-    fn factory(index: u32, kind: StreamErrorKind) -> impl FnOnce(ParseError) -> HeaderError {
+    fn factory(index: u32, kind: StreamErrorKind) -> impl FnOnce(ReadError) -> HeaderError {
         move |source| Self::new_with_source(index, kind, source)
     }
 }
@@ -396,7 +396,7 @@ mod test {
         StreamErrorKind::{self, *},
         FSB5_MAGIC,
     };
-    use crate::parse::Reader;
+    use crate::read::Reader;
     use std::num::NonZeroU32;
 
     #[test]
@@ -626,7 +626,7 @@ mod test {
     }
 
     #[test]
-    fn parse_extra_flags() {
+    fn parse_sample_chunk() {
         const DATA: &[u8; 72] = b"FSB5\x01\x00\x00\x00\x01\x00\x00\x000000000000000000000000000000000000000000000000000000\x010000000";
 
         let mut reader;

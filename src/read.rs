@@ -18,7 +18,7 @@ impl<R: Read> Reader<R> {
         }
     }
 
-    fn read_to_array<const LEN: usize>(&mut self, buf: &mut [u8; LEN]) -> ParseResult<()> {
+    fn read_to_array<const LEN: usize>(&mut self, buf: &mut [u8; LEN]) -> ReadResult<()> {
         match self.inner.read(buf) {
             Ok(n) => {
                 self.position += n;
@@ -26,20 +26,20 @@ impl<R: Read> Reader<R> {
                 if n == LEN {
                     Ok(())
                 } else {
-                    Err(ParseError::Incomplete(Needed::Size(
+                    Err(ReadError::Incomplete(Needed::Size(
                         NonZeroUsize::new(LEN - n).expect("n is guaranteed to not equal LEN"),
                     )))
                 }
             }
             Err(e) => match e.kind() {
                 ErrorKind::Interrupted => self.read_to_array(buf),
-                ErrorKind::UnexpectedEof => Err(ParseError::Incomplete(Needed::Unknown)),
-                _ => Err(ParseError::Failure(e)),
+                ErrorKind::UnexpectedEof => Err(ReadError::Incomplete(Needed::Unknown)),
+                _ => Err(ReadError::Failure(e)),
             },
         }
     }
 
-    fn read_to_slice(&mut self, buf: &mut [u8]) -> ParseResult<()> {
+    fn read_to_slice(&mut self, buf: &mut [u8]) -> ReadResult<()> {
         match self.inner.read(buf) {
             Ok(n) => {
                 self.position += n;
@@ -48,7 +48,7 @@ impl<R: Read> Reader<R> {
                 if n == buf_len {
                     Ok(())
                 } else {
-                    Err(ParseError::Incomplete(Needed::Size(
+                    Err(ReadError::Incomplete(Needed::Size(
                         NonZeroUsize::new(buf_len - n)
                             .expect("n is guaranteed to not equal buf_len"),
                     )))
@@ -56,8 +56,8 @@ impl<R: Read> Reader<R> {
             }
             Err(e) => match e.kind() {
                 ErrorKind::Interrupted => self.read_to_slice(buf),
-                ErrorKind::UnexpectedEof => Err(ParseError::Incomplete(Needed::Unknown)),
-                _ => Err(ParseError::Failure(e)),
+                ErrorKind::UnexpectedEof => Err(ReadError::Incomplete(Needed::Unknown)),
+                _ => Err(ReadError::Failure(e)),
             },
         }
     }
@@ -66,56 +66,56 @@ impl<R: Read> Reader<R> {
         self.position
     }
 
-    pub(crate) fn take<const LEN: usize>(&mut self) -> ParseResult<[u8; LEN]> {
+    pub(crate) fn take<const LEN: usize>(&mut self) -> ReadResult<[u8; LEN]> {
         let mut buf = [0; LEN];
         Self::read_to_array(self, &mut buf)?;
         Ok(buf)
     }
 
-    pub(crate) fn skip(&mut self, amount: usize) -> ParseResult<()> {
+    pub(crate) fn skip(&mut self, amount: usize) -> ReadResult<()> {
         let mut buf = vec![0u8; amount];
         Self::read_to_slice(self, buf.as_mut_slice())
     }
 
-    pub(crate) fn advance_to(&mut self, position: usize) -> ParseResult<()> {
+    pub(crate) fn advance_to(&mut self, position: usize) -> ReadResult<()> {
         self.skip(position - self.position)
     }
 
-    pub(crate) fn u8(&mut self) -> ParseResult<u8> {
+    pub(crate) fn u8(&mut self) -> ReadResult<u8> {
         let mut buf = [0; 1];
         Self::read_to_array(self, &mut buf)?;
         Ok(buf[0])
     }
 
-    pub(crate) fn le_u32(&mut self) -> ParseResult<u32> {
+    pub(crate) fn le_u32(&mut self) -> ReadResult<u32> {
         let mut buf = [0; 4];
         Self::read_to_array(self, &mut buf)?;
         Ok(u32::from_le_bytes(buf))
     }
 
-    pub(crate) fn le_u64(&mut self) -> ParseResult<u64> {
+    pub(crate) fn le_u64(&mut self) -> ReadResult<u64> {
         let mut buf = [0; 8];
         Self::read_to_array(self, &mut buf)?;
         Ok(u64::from_le_bytes(buf))
     }
 
-    pub(crate) fn le_i32(&mut self) -> ParseResult<i32> {
+    pub(crate) fn le_i32(&mut self) -> ReadResult<i32> {
         let mut buf = [0; 4];
         Self::read_to_array(self, &mut buf)?;
         Ok(i32::from_le_bytes(buf))
     }
 }
 
-type ParseResult<T> = Result<T, ParseError>;
+type ReadResult<T> = Result<T, ReadError>;
 
 #[derive(Debug)]
-pub(crate) enum ParseError {
+pub(crate) enum ReadError {
     Failure(IoError),
     Incomplete(Needed),
 }
 
 #[cfg(test)]
-impl PartialEq for ParseError {
+impl PartialEq for ReadError {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Failure(first), Self::Failure(second)) => first.kind() == second.kind(),
@@ -131,13 +131,13 @@ pub(crate) enum Needed {
     Unknown,
 }
 
-impl Display for ParseError {
+impl Display for ReadError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
-            Self::Failure(_) => f.write_str("failed to parse data due to I/O error"),
+            Self::Failure(_) => f.write_str("failed to read data due to I/O error"),
             Self::Incomplete(needed) => match needed {
                 Needed::Size(size) => {
-                    f.write_str(&format!("incomplete data: needed {size} more bytes to parse"))
+                    f.write_str(&format!("incomplete data: needed {size} more bytes to read"))
                 }
                 Needed::Unknown => f.write_str("incomplete data"),
             },
@@ -145,7 +145,7 @@ impl Display for ParseError {
     }
 }
 
-impl Error for ParseError {
+impl Error for ReadError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Failure(err) => Some(err),
@@ -156,7 +156,7 @@ impl Error for ParseError {
 
 #[cfg(test)]
 mod test {
-    use super::{Needed, ParseError, ParseResult, Reader};
+    use super::{Needed, ReadError, ReadResult, Reader};
     use std::{
         io::{Error as IoError, ErrorKind, Read, Result as IoResult},
         num::NonZeroUsize,
@@ -173,7 +173,7 @@ mod test {
         assert_eq!(reader.take(), Ok([]));
         assert_eq!(
             reader.take::<1>(),
-            Err(ParseError::Incomplete(Needed::Size(NonZeroUsize::new(1).unwrap())))
+            Err(ReadError::Incomplete(Needed::Size(NonZeroUsize::new(1).unwrap())))
         );
     }
 
@@ -188,7 +188,7 @@ mod test {
         assert_eq!(reader.skip(0), Ok(()));
         assert_eq!(
             reader.skip(1),
-            Err(ParseError::Incomplete(Needed::Size(NonZeroUsize::new(1).unwrap())))
+            Err(ReadError::Incomplete(Needed::Size(NonZeroUsize::new(1).unwrap())))
         );
     }
 
@@ -208,7 +208,7 @@ mod test {
 
         assert_eq!(
             reader.advance_to(10),
-            Err(ParseError::Incomplete(Needed::Size(NonZeroUsize::new(4).unwrap())))
+            Err(ReadError::Incomplete(Needed::Size(NonZeroUsize::new(4).unwrap())))
         );
     }
 
@@ -249,12 +249,12 @@ mod test {
 
         assert_eq!(
             reader.le_u32(),
-            Err(ParseError::Incomplete(Needed::Size(NonZeroUsize::new(2).unwrap())))
+            Err(ReadError::Incomplete(Needed::Size(NonZeroUsize::new(2).unwrap())))
         );
     }
 
     impl<R: Read> Reader<R> {
-        fn unit(&mut self) -> ParseResult<()> {
+        fn unit(&mut self) -> ReadResult<()> {
             let mut buf = [0; 0];
             Self::read_to_array(self, &mut buf)
         }
@@ -319,7 +319,7 @@ mod test {
     fn handle_unexpected_eof() {
         let mut reader = Reader::new(EofReader);
 
-        assert_eq!(reader.unit(), Err(ParseError::Incomplete(Needed::Unknown)));
+        assert_eq!(reader.unit(), Err(ReadError::Incomplete(Needed::Unknown)));
     }
 
     struct UnsupportedReader;
@@ -346,7 +346,7 @@ mod test {
 
         assert_eq!(
             reader.unit(),
-            Err(ParseError::Failure(IoError::from(ErrorKind::Unsupported)))
+            Err(ReadError::Failure(IoError::from(ErrorKind::Unsupported)))
         );
     }
 }
