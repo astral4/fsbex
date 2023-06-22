@@ -112,7 +112,7 @@ struct SampleMode {
 }
 
 impl RawSampleMode {
-    fn parse(self, stream_index: u32) -> Result<SampleMode, HeaderError> {
+    fn parse(self, stream_index: u32) -> Result<SampleMode, StreamError> {
         let sample_rate = match self.sample_rate().value() {
             0 => Ok(4000),
             1 => Ok(8000),
@@ -194,7 +194,7 @@ enum SampleChunkKind {
 }
 
 impl RawSampleChunk {
-    fn parse(self, stream_index: u32) -> Result<SampleChunk, HeaderError> {
+    fn parse(self, stream_index: u32) -> Result<SampleChunk, StreamError> {
         #[allow(clippy::enum_glob_use)]
         use SampleChunkKind::*;
 
@@ -322,26 +322,23 @@ enum StreamErrorKind {
 }
 
 impl StreamError {
-    #[allow(clippy::new_ret_no_self)]
-    fn new(index: u32, kind: StreamErrorKind) -> HeaderError {
+    fn new(index: u32, kind: StreamErrorKind) -> Self {
         Self {
             index,
             kind,
             source: None,
         }
-        .into()
     }
 
-    fn new_with_source(index: u32, kind: StreamErrorKind, source: ReadError) -> HeaderError {
+    fn new_with_source(index: u32, kind: StreamErrorKind, source: ReadError) -> Self {
         Self {
             index,
             kind,
             source: Some(source),
         }
-        .into()
     }
 
-    fn factory(index: u32, kind: StreamErrorKind) -> impl FnOnce(ReadError) -> HeaderError {
+    fn factory(index: u32, kind: StreamErrorKind) -> impl FnOnce(ReadError) -> Self {
         move |source| Self::new_with_source(index, kind, source)
     }
 }
@@ -584,15 +581,15 @@ mod test {
         let mode = RawSampleMode::from(data);
         assert!(mode
             .parse(0)
-            .is_err_and(|e| e.is_stream_err_kind(SampleRateFlag { flag: 0b1110 })));
+            .is_err_and(|e| e.kind == SampleRateFlag { flag: 0b1110 }));
 
         let data = 0b011010000101100111100000001011_000000000000000000000000000_11_0000_0;
         let mode = RawSampleMode::from(data);
-        assert!(mode.parse(0).is_err_and(|e| e.is_stream_err_kind(ZeroDataOffset)));
+        assert!(mode.parse(0).is_err_and(|e| e.kind == ZeroDataOffset));
 
         let data = 0b000000000000000000000000000000_111001101101001101000100110_11_0000_0;
         let mode = RawSampleMode::from(data);
-        assert!(mode.parse(0).is_err_and(|e| e.is_stream_err_kind(ZeroSamples)));
+        assert!(mode.parse(0).is_err_and(|e| e.kind == ZeroSamples));
 
         let data = 0b000000000000000000000000000001_000000000000000000000000001_01_1000_0;
         let mode = RawSampleMode::from(data).parse(0).unwrap();
