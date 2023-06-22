@@ -61,9 +61,9 @@ impl Header {
                 Err(e) => Err(StreamError::new_with_source(index, StreamErrorKind::SampleMode, e)),
             }?;
 
-            if mode.has_extra_flags {
-                let extra_flags = match reader.le_u32() {
-                    Ok(n) => RawExtraFlags::from(n).parse(index),
+            if mode.has_chunks {
+                let chunk = match reader.le_u32() {
+                    Ok(n) => RawSampleChunk::from(n).parse(index),
                     Err(e) => {
                         Err(StreamError::new_with_source(index, StreamErrorKind::ExtraFlags, e))
                     }
@@ -95,7 +95,7 @@ impl Version {
 #[bitsize(64)]
 #[derive(FromBits)]
 struct RawSampleMode {
-    has_extra_flags: bool,
+    has_chunks: bool,
     sample_rate: u4,
     channels: u2,
     data_offset: u27,
@@ -104,7 +104,7 @@ struct RawSampleMode {
 
 #[derive(Debug, PartialEq)]
 struct SampleMode {
-    has_extra_flags: bool,
+    has_chunks: bool,
     sample_rate: NonZeroU32,
     channels: u8,
     data_offset: NonZeroU32,
@@ -155,7 +155,7 @@ impl RawSampleMode {
             .map_err(|_| StreamError::new(stream_index, StreamErrorKind::ZeroSamples))?;
 
         Ok(SampleMode {
-            has_extra_flags: self.has_extra_flags(),
+            has_chunks: self.has_chunks(),
             sample_rate,
             channels,
             data_offset,
@@ -166,19 +166,19 @@ impl RawSampleMode {
 
 #[bitsize(32)]
 #[derive(FromBits)]
-struct RawExtraFlags {
-    end: bool,
+struct RawSampleChunk {
+    is_end: bool,
     size: u24,
     kind: u7,
 }
 
-struct ExtraFlags {
-    end: bool,
+struct SampleChunk {
+    is_end: bool,
     size: u32,
-    kind: ExtraFlagsKind,
+    kind: SampleChunkKind,
 }
 
-enum ExtraFlagsKind {
+enum SampleChunkKind {
     Channels,
     SampleRate,
     Loop,
@@ -193,10 +193,10 @@ enum ExtraFlagsKind {
     OpusDataSize,
 }
 
-impl RawExtraFlags {
-    fn parse(self, stream_index: u32) -> Result<ExtraFlags, HeaderError> {
+impl RawSampleChunk {
+    fn parse(self, stream_index: u32) -> Result<SampleChunk, HeaderError> {
         #[allow(clippy::enum_glob_use)]
-        use ExtraFlagsKind::*;
+        use SampleChunkKind::*;
 
         let kind = match self.kind().value() {
             1 => Ok(Channels),
@@ -217,8 +217,8 @@ impl RawExtraFlags {
             )),
         }?;
 
-        Ok(ExtraFlags {
-            end: self.end(),
+        Ok(SampleChunk {
+            is_end: self.is_end(),
             size: self.size().value(),
             kind,
         })
@@ -392,7 +392,7 @@ mod test {
     use super::{
         Header, HeaderError,
         HeaderErrorKind::*,
-        HeaderErrorSource, RawExtraFlags, RawSampleMode, SampleMode,
+        HeaderErrorSource, RawSampleChunk, RawSampleMode, SampleMode,
         StreamErrorKind::{self, *},
         FSB5_MAGIC,
     };
@@ -561,8 +561,8 @@ mod test {
 
         let mode = RawSampleMode::from(data);
 
-        let has_extra_flags = (data & 0x01) == 1;
-        assert_eq!(mode.has_extra_flags(), has_extra_flags);
+        let has_chunks = (data & 0x01) == 1;
+        assert_eq!(mode.has_chunks(), has_chunks);
 
         let sample_rate_flag = (data >> 1) & 0x0F;
         assert_eq!(u64::from(mode.sample_rate().value()), sample_rate_flag);
@@ -599,7 +599,7 @@ mod test {
         assert_eq!(
             mode,
             SampleMode {
-                has_extra_flags: false,
+                has_chunks: false,
                 sample_rate: NonZeroU32::new(44100).unwrap(),
                 channels: 2,
                 data_offset: NonZeroU32::new(32).unwrap(),
@@ -609,14 +609,14 @@ mod test {
     }
 
     #[test]
-    fn derived_extra_flags_parsing_works() {
+    fn derived_sample_chunk_parsing_works() {
         #[allow(clippy::unusual_byte_groupings)]
         let data = 0b0001101_100001101110000000011001_0;
 
-        let flags = RawExtraFlags::from(data);
+        let flags = RawSampleChunk::from(data);
 
-        let end = (data & 0x01) == 1;
-        assert_eq!(flags.end(), end);
+        let is_end = (data & 0x01) == 1;
+        assert_eq!(flags.is_end(), is_end);
 
         let size = (data >> 1) & 0x00FF_FFFF;
         assert_eq!(flags.size().value(), size);
@@ -637,7 +637,7 @@ mod test {
         #[allow(clippy::items_after_statements)]
         fn test_invalid_flag(kind: u8) {
             let flag = u32::from(kind).swap_bytes() << 1;
-            assert!(RawExtraFlags::from(flag).parse(0).is_err());
+            assert!(RawSampleChunk::from(flag).parse(0).is_err());
 
             let full = {
                 let mut buf = Vec::from(*DATA);
