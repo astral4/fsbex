@@ -28,7 +28,7 @@ impl Header {
             .le_u32()
             .map_err(HeaderError::factory(HeaderErrorKind::TotalSubsongs))?
             .try_into()
-            .map_err(|_| HeaderError::new(HeaderErrorKind::NoSubsongs))?;
+            .map_err(|_| HeaderError::new(HeaderErrorKind::ZeroSubsongs))?;
 
         let sample_header_size = reader
             .le_u32()
@@ -52,7 +52,7 @@ impl Header {
         };
 
         reader
-            .skip((base_header_size - 28).try_into().unwrap())
+            .advance_to(base_header_size)
             .map_err(HeaderError::factory(HeaderErrorKind::Metadata))?;
 
         for index in 0..total_subsongs.into() {
@@ -125,7 +125,10 @@ impl RawSampleMode {
             8 => Ok(44100),
             9 => Ok(48000),
             10 => Ok(96000),
-            flag => Err(StreamError::new(stream_index, StreamErrorKind::SampleRate { flag })),
+            flag => Err(StreamError::new(
+                stream_index,
+                StreamErrorKind::SampleRateFlag { flag },
+            )),
         }?
         .try_into()
         .unwrap();
@@ -143,13 +146,13 @@ impl RawSampleMode {
             .value()
             .mul(32)
             .try_into()
-            .map_err(|_| StreamError::new(stream_index, StreamErrorKind::DataOffset))?;
+            .map_err(|_| StreamError::new(stream_index, StreamErrorKind::ZeroDataOffset))?;
 
         let num_samples = self
             .num_samples()
             .value()
             .try_into()
-            .map_err(|_| StreamError::new(stream_index, StreamErrorKind::SampleQuantity))?;
+            .map_err(|_| StreamError::new(stream_index, StreamErrorKind::ZeroSamples))?;
 
         Ok(SampleMode {
             has_extra_flags: self.has_extra_flags(),
@@ -234,7 +237,7 @@ enum HeaderErrorKind {
     Version,
     UnknownVersion { version: u32 },
     TotalSubsongs,
-    NoSubsongs,
+    ZeroSubsongs,
     SampleHeaderSize,
     NameTableSize,
     SampleDataSize,
@@ -278,7 +281,7 @@ impl Display for HeaderError {
                 f.write_str(&format!("file format version was not recognized (0x{version:08x})"))
             }
             TotalSubsongs => f.write_str("failed to read number of subsongs"),
-            NoSubsongs => f.write_str("number of subsongs was 0"),
+            ZeroSubsongs => f.write_str("number of subsongs was 0"),
             SampleHeaderSize => f.write_str("failed to read size of sample header"),
             NameTableSize => f.write_str("failed to read size of name table"),
             SampleDataSize => f.write_str("failed to read size of sample data"),
@@ -311,9 +314,9 @@ struct StreamError {
 #[derive(Debug, PartialEq)]
 enum StreamErrorKind {
     SampleMode,
-    SampleRate { flag: u8 },
-    DataOffset,
-    SampleQuantity,
+    SampleRateFlag { flag: u8 },
+    ZeroDataOffset,
+    ZeroSamples,
     ExtraFlags,
     UnknownFlagType { flag: u8 },
 }
@@ -358,12 +361,12 @@ impl Display for StreamError {
         use StreamErrorKind::*;
 
         match self.kind {
-            SampleMode => f.write_str("failed to parse sample mode"),
-            SampleRate { flag } => {
+            SampleMode => f.write_str("failed to read sample mode"),
+            SampleRateFlag { flag } => {
                 f.write_str(&format!("sample rate flag was not recognized (0x{flag:02x})"))
             }
-            DataOffset => f.write_str("sample data offset was 0"),
-            SampleQuantity => f.write_str("number of samples was 0"),
+            ZeroDataOffset => f.write_str("sample data offset was 0"),
+            ZeroSamples => f.write_str("number of samples was 0"),
             ExtraFlags => f.write_str("failed to read extra flags"),
             UnknownFlagType { flag } => {
                 f.write_str(&format!("type of extra flag was not recognized (0x{flag:02x})"))
@@ -439,7 +442,7 @@ mod test {
 
         let data = b"FSB5\x01\x00\x00\x00\x00\x00\x00\x00";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == NoSubsongs));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == ZeroSubsongs));
 
         let data = b"FSB5\x01\x00\x00\x00\x00\x00\xFF\xFF";
         reader = Reader::new(data.as_slice());
@@ -581,15 +584,15 @@ mod test {
         let mode = RawSampleMode::from(data);
         assert!(mode
             .parse(0)
-            .is_err_and(|e| e.is_stream_err_kind(SampleRate { flag: 0b1110 })));
+            .is_err_and(|e| e.is_stream_err_kind(SampleRateFlag { flag: 0b1110 })));
 
         let data = 0b011010000101100111100000001011_000000000000000000000000000_11_0000_0;
         let mode = RawSampleMode::from(data);
-        assert!(mode.parse(0).is_err_and(|e| e.is_stream_err_kind(DataOffset)));
+        assert!(mode.parse(0).is_err_and(|e| e.is_stream_err_kind(ZeroDataOffset)));
 
         let data = 0b000000000000000000000000000000_111001101101001101000100110_11_0000_0;
         let mode = RawSampleMode::from(data);
-        assert!(mode.parse(0).is_err_and(|e| e.is_stream_err_kind(SampleQuantity)));
+        assert!(mode.parse(0).is_err_and(|e| e.is_stream_err_kind(ZeroSamples)));
 
         let data = 0b000000000000000000000000000001_000000000000000000000000001_01_1000_0;
         let mode = RawSampleMode::from(data).parse(0).unwrap();
