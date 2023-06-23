@@ -8,7 +8,6 @@ use std::{
     ops::Mul,
 };
 
-#[derive(Debug, PartialEq)]
 struct Header {}
 
 impl Header {
@@ -227,7 +226,7 @@ struct HeaderError {
     source: Option<HeaderErrorSource>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum HeaderErrorKind {
     Magic,
     Version,
@@ -261,7 +260,7 @@ impl HeaderError {
     }
 
     fn factory(kind: HeaderErrorKind) -> impl FnOnce(ReadError) -> Self {
-        |source| Self::new_with_source(kind, source)
+        move |source| Self::new_with_source(kind, source)
     }
 }
 
@@ -307,7 +306,7 @@ struct StreamError {
     source: Option<StreamErrorSource>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum StreamErrorKind {
     SampleMode,
     SampleRateFlag { flag: u8 },
@@ -391,7 +390,7 @@ struct ChunkError {
     source: Option<ReadError>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ChunkErrorKind {
     Flag,
     UnknownTypeFlag { flag: u8 },
@@ -569,7 +568,6 @@ mod test {
     }
 
     impl HeaderError {
-        #[allow(clippy::needless_pass_by_value)]
         fn is_stream_err_kind(&self, kind: StreamErrorKind) -> bool {
             match &self.source {
                 Some(HeaderErrorSource::Stream(e)) => e.kind == kind,
@@ -693,7 +691,6 @@ mod test {
     }
 
     impl HeaderError {
-        #[allow(clippy::needless_pass_by_value)]
         fn is_chunk_err_kind(&self, kind: ChunkErrorKind) -> bool {
             match &self.source {
                 Some(HeaderErrorSource::Stream(e)) => match &e.source {
