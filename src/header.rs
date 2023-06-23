@@ -1,12 +1,9 @@
-use crate::read::{ReadError, Reader};
-use bilge::prelude::*;
-use std::{
-    error::Error,
-    fmt::{Display, Formatter, Result as FmtResult},
-    io::Read,
-    num::NonZeroU32,
-    ops::Mul,
+use crate::error::{
+    ChunkError, ChunkErrorKind, HeaderError, HeaderErrorKind, StreamError, StreamErrorKind,
 };
+use crate::read::Reader;
+use bilge::prelude::*;
+use std::{io::Read, num::NonZeroU32, ops::Mul};
 
 struct Header {}
 
@@ -220,248 +217,11 @@ impl RawSampleChunk {
     }
 }
 
-#[derive(Debug)]
-struct HeaderError {
-    kind: HeaderErrorKind,
-    source: Option<HeaderErrorSource>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum HeaderErrorKind {
-    Magic,
-    Version,
-    UnknownVersion { version: u32 },
-    TotalSubsongs,
-    ZeroSubsongs,
-    SampleHeaderSize,
-    NameTableSize,
-    SampleDataSize,
-    Codec,
-    Metadata,
-    Stream,
-}
-
-#[derive(Debug)]
-enum HeaderErrorSource {
-    Read(ReadError),
-    Stream(StreamError),
-}
-
-impl HeaderError {
-    fn new(kind: HeaderErrorKind) -> Self {
-        Self { kind, source: None }
-    }
-
-    fn new_with_source(kind: HeaderErrorKind, source: ReadError) -> Self {
-        Self {
-            kind,
-            source: Some(HeaderErrorSource::Read(source)),
-        }
-    }
-
-    fn factory(kind: HeaderErrorKind) -> impl FnOnce(ReadError) -> Self {
-        move |source| Self::new_with_source(kind, source)
-    }
-}
-
-impl Display for HeaderError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        #[allow(clippy::enum_glob_use)]
-        use HeaderErrorKind::*;
-
-        match self.kind {
-            Magic => f.write_str("no file signature found"),
-            Version => f.write_str("failed to read file format version"),
-            UnknownVersion { version } => {
-                f.write_str(&format!("file format version was not recognized (0x{version:08x})"))
-            }
-            TotalSubsongs => f.write_str("failed to read number of subsongs"),
-            ZeroSubsongs => f.write_str("number of subsongs was 0"),
-            SampleHeaderSize => f.write_str("failed to read size of sample header"),
-            NameTableSize => f.write_str("failed to read size of name table"),
-            SampleDataSize => f.write_str("failed to read size of sample data"),
-            Codec => f.write_str("failed to parse codec"),
-            Metadata => f.write_str("failed to read (unused) metadata bytes"),
-            Stream => f.write_str("failed to parse stream header"),
-        }
-    }
-}
-
-impl Error for HeaderError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match &self.source {
-            Some(source) => match source {
-                HeaderErrorSource::Read(e) => Some(e),
-                HeaderErrorSource::Stream(e) => Some(e),
-            },
-            None => None,
-        }
-    }
-}
-
-#[derive(Debug)]
-struct StreamError {
-    index: u32,
-    kind: StreamErrorKind,
-    source: Option<StreamErrorSource>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum StreamErrorKind {
-    SampleMode,
-    SampleRateFlag { flag: u8 },
-    ZeroDataOffset,
-    ZeroSamples,
-    Chunk,
-}
-
-#[derive(Debug)]
-enum StreamErrorSource {
-    Read(ReadError),
-    Chunk(ChunkError),
-}
-
-impl StreamError {
-    fn new(index: u32, kind: StreamErrorKind) -> Self {
-        Self {
-            index,
-            kind,
-            source: None,
-        }
-    }
-
-    fn new_with_source(index: u32, kind: StreamErrorKind, source: ReadError) -> Self {
-        Self {
-            index,
-            kind,
-            source: Some(StreamErrorSource::Read(source)),
-        }
-    }
-
-    fn factory(index: u32, kind: StreamErrorKind) -> impl FnOnce(ReadError) -> Self {
-        move |source| Self::new_with_source(index, kind, source)
-    }
-}
-
-impl From<StreamError> for HeaderError {
-    fn from(value: StreamError) -> Self {
-        Self {
-            kind: HeaderErrorKind::Stream,
-            source: Some(HeaderErrorSource::Stream(value)),
-        }
-    }
-}
-
-impl Display for StreamError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        #[allow(clippy::enum_glob_use)]
-        use StreamErrorKind::*;
-
-        match self.kind {
-            SampleMode => f.write_str("failed to read sample mode"),
-            SampleRateFlag { flag } => {
-                f.write_str(&format!("sample rate flag was not recognized (0x{flag:02x})"))
-            }
-            ZeroDataOffset => f.write_str("sample data offset was 0"),
-            ZeroSamples => f.write_str("number of samples was 0"),
-            Chunk => f.write_str("failed to parse sample chunk"),
-        }?;
-
-        f.write_str(&format!(" - stream at index {}", self.index))
-    }
-}
-
-impl Error for StreamError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match &self.source {
-            Some(source) => match source {
-                StreamErrorSource::Read(e) => Some(e),
-                StreamErrorSource::Chunk(e) => Some(e),
-            },
-            None => None,
-        }
-    }
-}
-
-#[derive(Debug)]
-struct ChunkError {
-    index: u32,
-    kind: ChunkErrorKind,
-    source: Option<ReadError>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ChunkErrorKind {
-    Flag,
-    UnknownTypeFlag { flag: u8 },
-}
-
-impl ChunkError {
-    fn new(index: u32, kind: ChunkErrorKind) -> Self {
-        Self {
-            index,
-            kind,
-            source: None,
-        }
-    }
-
-    fn new_with_source(index: u32, kind: ChunkErrorKind, source: ReadError) -> Self {
-        Self {
-            index,
-            kind,
-            source: Some(source),
-        }
-    }
-
-    fn factory(index: u32, kind: ChunkErrorKind) -> impl FnOnce(ReadError) -> Self {
-        move |source| Self::new_with_source(index, kind, source)
-    }
-
-    fn into_stream_err(self, stream_index: u32) -> StreamError {
-        StreamError {
-            index: stream_index,
-            kind: StreamErrorKind::Chunk,
-            source: Some(StreamErrorSource::Chunk(self)),
-        }
-    }
-}
-
-impl Display for ChunkError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        #[allow(clippy::enum_glob_use)]
-        use ChunkErrorKind::*;
-
-        match self.kind {
-            Flag => f.write_str("failed to read chunk flag"),
-            UnknownTypeFlag { flag } => {
-                f.write_str(&format!("type of chunk flag was not recognized (0x{flag:02x})"))
-            }
-        }?;
-
-        f.write_str(&format!(" - chunk at index {}", self.index))
-    }
-}
-
-impl Error for ChunkError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match &self.source {
-            Some(source) => Some(source),
-            None => None,
-        }
-    }
-}
-
 #[cfg(test)]
 mod test {
+    use super::{Header, RawSampleChunk, RawSampleMode, SampleMode, FSB5_MAGIC};
     #[allow(clippy::enum_glob_use)]
-    use super::{
-        ChunkErrorKind::{self, *},
-        Header, HeaderError,
-        HeaderErrorKind::*,
-        HeaderErrorSource, RawSampleChunk, RawSampleMode, SampleMode,
-        StreamErrorKind::{self, *},
-        StreamErrorSource, FSB5_MAGIC,
-    };
+    use crate::error::{ChunkErrorKind::*, HeaderErrorKind::*, StreamErrorKind::*};
     use crate::read::Reader;
     use std::num::NonZeroU32;
 
@@ -470,13 +230,13 @@ mod test {
         let mut reader;
 
         reader = Reader::new(b"".as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == Magic));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == Magic));
 
         reader = Reader::new(b"abcd".as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == Magic));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == Magic));
 
         reader = Reader::new(FSB5_MAGIC.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == Version));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == Version));
     }
 
     #[test]
@@ -485,17 +245,17 @@ mod test {
 
         let data = b"FSB5\x00";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == Version));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == Version));
 
         let data = b"FSB5\xFF\x00\x00\x00";
         reader = Reader::new(data.as_slice());
         assert!(
-            Header::parse(&mut reader).is_err_and(|e| e.kind == UnknownVersion { version: 0xFF })
+            Header::parse(&mut reader).is_err_and(|e| e.kind() == UnknownVersion { version: 0xFF })
         );
 
         let data = b"FSB5\x00\x00\x00\x00";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == TotalSubsongs));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == TotalSubsongs));
     }
 
     #[test]
@@ -504,15 +264,15 @@ mod test {
 
         let data = b"FSB5\x01\x00\x00\x00\x00";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == TotalSubsongs));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == TotalSubsongs));
 
         let data = b"FSB5\x01\x00\x00\x00\x00\x00\x00\x00";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == ZeroSubsongs));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == ZeroSubsongs));
 
         let data = b"FSB5\x01\x00\x00\x00\x00\x00\xFF\xFF";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == SampleHeaderSize));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == SampleHeaderSize));
     }
 
     #[test]
@@ -521,11 +281,11 @@ mod test {
 
         let data = b"FSB5\x01\x00\x00\x000000\x00";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == SampleHeaderSize));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == SampleHeaderSize));
 
         let data = b"FSB5\x01\x00\x00\x0000000000";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == NameTableSize));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == NameTableSize));
     }
 
     #[test]
@@ -534,11 +294,11 @@ mod test {
 
         let data = b"FSB5\x01\x00\x00\x0000000000\x00";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == NameTableSize));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == NameTableSize));
 
         let data = b"FSB5\x01\x00\x00\x00000000000000";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == SampleDataSize));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == SampleDataSize));
     }
 
     #[test]
@@ -547,11 +307,11 @@ mod test {
 
         let data = b"FSB5\x01\x00\x00\x00000000000000\x00";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == SampleDataSize));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == SampleDataSize));
 
         let data = b"FSB5\x01\x00\x00\x000000000000000000";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == Codec));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == Codec));
     }
 
     #[test]
@@ -560,20 +320,11 @@ mod test {
 
         let data = b"FSB5\x01\x00\x00\x000000000000000000\x00";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == Codec));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == Codec));
 
         let data = b"FSB5\x01\x00\x00\x0000000000000000000000";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == Metadata));
-    }
-
-    impl HeaderError {
-        fn is_stream_err_kind(&self, kind: StreamErrorKind) -> bool {
-            match &self.source {
-                Some(HeaderErrorSource::Stream(e)) => e.kind == kind,
-                _ => false,
-            }
-        }
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == Metadata));
     }
 
     #[test]
@@ -585,7 +336,7 @@ mod test {
 
         let incomplete_data = b"FSB5\x01\x00\x00\x0000000000000000000000\x00";
         reader = Reader::new(incomplete_data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == Metadata));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == Metadata));
 
         let err_v1_data = {
             let mut buf = Vec::from(V1_HEADER_BASE);
@@ -593,7 +344,7 @@ mod test {
             buf
         };
         reader = Reader::new(&err_v1_data);
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind == Metadata));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == Metadata));
 
         let ok_v0_data = {
             let mut buf = Vec::from(V0_HEADER_BASE);
@@ -649,15 +400,15 @@ mod test {
         let mode = RawSampleMode::from(data);
         assert!(mode
             .parse(0)
-            .is_err_and(|e| e.kind == SampleRateFlag { flag: 0b1110 }));
+            .is_err_and(|e| e.kind() == SampleRateFlag { flag: 0b1110 }));
 
         let data = 0b011010000101100111100000001011_000000000000000000000000000_11_0000_0;
         let mode = RawSampleMode::from(data);
-        assert!(mode.parse(0).is_err_and(|e| e.kind == ZeroDataOffset));
+        assert!(mode.parse(0).is_err_and(|e| e.kind() == ZeroDataOffset));
 
         let data = 0b000000000000000000000000000000_111001101101001101000100110_11_0000_0;
         let mode = RawSampleMode::from(data);
-        assert!(mode.parse(0).is_err_and(|e| e.kind == ZeroSamples));
+        assert!(mode.parse(0).is_err_and(|e| e.kind() == ZeroSamples));
 
         let data = 0b000000000000000000000000000001_000000000000000000000000001_01_1000_0;
         let mode = RawSampleMode::from(data).parse(0).unwrap();
@@ -688,18 +439,6 @@ mod test {
 
         let kind = (data >> 25) & 0x7F;
         assert_eq!(u32::from(flags.kind().value()), kind);
-    }
-
-    impl HeaderError {
-        fn is_chunk_err_kind(&self, kind: ChunkErrorKind) -> bool {
-            match &self.source {
-                Some(HeaderErrorSource::Stream(e)) => match &e.source {
-                    Some(StreamErrorSource::Chunk(e)) => e.kind == kind,
-                    _ => false,
-                },
-                _ => false,
-            }
-        }
     }
 
     #[test]
