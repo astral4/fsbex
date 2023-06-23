@@ -63,11 +63,10 @@ impl Header {
 
             if mode.has_chunks {
                 let chunk = match reader.le_u32() {
-                    Ok(n) => RawSampleChunk::from(n).parse(index),
-                    Err(e) => {
-                        Err(StreamError::new_with_source(index, StreamErrorKind::ExtraFlags, e))
-                    }
-                }?;
+                    Ok(n) => RawSampleChunk::from(n).parse(0),
+                    Err(e) => Err(ChunkError::new_with_source(0, ChunkErrorKind::Flag, e)),
+                }
+                .map_err(|e| e.into_stream_err(index))?;
             }
         }
 
@@ -194,7 +193,7 @@ enum SampleChunkKind {
 }
 
 impl RawSampleChunk {
-    fn parse(self, stream_index: u32) -> Result<SampleChunk, StreamError> {
+    fn parse(self, chunk_index: u32) -> Result<SampleChunk, ChunkError> {
         #[allow(clippy::enum_glob_use)]
         use SampleChunkKind::*;
 
@@ -211,10 +210,7 @@ impl RawSampleChunk {
             13 => Ok(PeakVolume),
             14 => Ok(VorbisIntraLayers),
             15 => Ok(OpusDataSize),
-            flag => Err(StreamError::new(
-                stream_index,
-                StreamErrorKind::UnknownFlagType { flag },
-            )),
+            flag => Err(ChunkError::new(chunk_index, ChunkErrorKind::UnknownTypeFlag { flag })),
         }?;
 
         Ok(SampleChunk {
@@ -308,7 +304,7 @@ impl Error for HeaderError {
 struct StreamError {
     index: u32,
     kind: StreamErrorKind,
-    source: Option<ReadError>,
+    source: Option<StreamErrorSource>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -317,8 +313,13 @@ enum StreamErrorKind {
     SampleRateFlag { flag: u8 },
     ZeroDataOffset,
     ZeroSamples,
-    ExtraFlags,
-    UnknownFlagType { flag: u8 },
+    Chunk,
+}
+
+#[derive(Debug)]
+enum StreamErrorSource {
+    Read(ReadError),
+    Chunk(ChunkError),
 }
 
 impl StreamError {
@@ -334,7 +335,7 @@ impl StreamError {
         Self {
             index,
             kind,
-            source: Some(source),
+            source: Some(StreamErrorSource::Read(source)),
         }
     }
 
@@ -364,17 +365,85 @@ impl Display for StreamError {
             }
             ZeroDataOffset => f.write_str("sample data offset was 0"),
             ZeroSamples => f.write_str("number of samples was 0"),
-            ExtraFlags => f.write_str("failed to read extra flags"),
-            UnknownFlagType { flag } => {
-                f.write_str(&format!("type of extra flag was not recognized (0x{flag:02x})"))
-            }
+            Chunk => f.write_str("failed to parse sample chunk"),
         }?;
 
-        f.write_str(&format!(" (stream at index {})", self.index))
+        f.write_str(&format!(" - stream at index {}", self.index))
     }
 }
 
 impl Error for StreamError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match &self.source {
+            Some(source) => match source {
+                StreamErrorSource::Read(e) => Some(e),
+                StreamErrorSource::Chunk(e) => Some(e),
+            },
+            None => None,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct ChunkError {
+    index: u32,
+    kind: ChunkErrorKind,
+    source: Option<ReadError>,
+}
+
+#[derive(Debug, PartialEq)]
+enum ChunkErrorKind {
+    Flag,
+    UnknownTypeFlag { flag: u8 },
+}
+
+impl ChunkError {
+    fn new(index: u32, kind: ChunkErrorKind) -> Self {
+        Self {
+            index,
+            kind,
+            source: None,
+        }
+    }
+
+    fn new_with_source(index: u32, kind: ChunkErrorKind, source: ReadError) -> Self {
+        Self {
+            index,
+            kind,
+            source: Some(source),
+        }
+    }
+
+    fn factory(index: u32, kind: ChunkErrorKind) -> impl FnOnce(ReadError) -> Self {
+        move |source| Self::new_with_source(index, kind, source)
+    }
+
+    fn into_stream_err(self, stream_index: u32) -> StreamError {
+        StreamError {
+            index: stream_index,
+            kind: StreamErrorKind::Chunk,
+            source: Some(StreamErrorSource::Chunk(self)),
+        }
+    }
+}
+
+impl Display for ChunkError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        #[allow(clippy::enum_glob_use)]
+        use ChunkErrorKind::*;
+
+        match self.kind {
+            Flag => f.write_str("failed to read chunk flag"),
+            UnknownTypeFlag { flag } => {
+                f.write_str(&format!("type of chunk flag was not recognized (0x{flag:02x})"))
+            }
+        }?;
+
+        f.write_str(&format!(" - chunk at index {}", self.index))
+    }
+}
+
+impl Error for ChunkError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match &self.source {
             Some(source) => Some(source),
@@ -387,11 +456,12 @@ impl Error for StreamError {
 mod test {
     #[allow(clippy::enum_glob_use)]
     use super::{
+        ChunkErrorKind::{self, *},
         Header, HeaderError,
         HeaderErrorKind::*,
         HeaderErrorSource, RawSampleChunk, RawSampleMode, SampleMode,
         StreamErrorKind::{self, *},
-        FSB5_MAGIC,
+        StreamErrorSource, FSB5_MAGIC,
     };
     use crate::read::Reader;
     use std::num::NonZeroU32;
@@ -622,6 +692,19 @@ mod test {
         assert_eq!(u32::from(flags.kind().value()), kind);
     }
 
+    impl HeaderError {
+        #[allow(clippy::needless_pass_by_value)]
+        fn is_chunk_err_kind(&self, kind: ChunkErrorKind) -> bool {
+            match &self.source {
+                Some(HeaderErrorSource::Stream(e)) => match &e.source {
+                    Some(StreamErrorSource::Chunk(e)) => e.kind == kind,
+                    _ => false,
+                },
+                _ => false,
+            }
+        }
+    }
+
     #[test]
     fn parse_sample_chunk() {
         const DATA: &[u8; 72] = b"FSB5\x01\x00\x00\x00\x01\x00\x00\x000000000000000000000000000000000000000000000000000000\x010000000";
@@ -629,7 +712,7 @@ mod test {
         let mut reader;
 
         reader = Reader::new(DATA.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.is_stream_err_kind(ExtraFlags)));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.is_chunk_err_kind(Flag)));
 
         #[allow(clippy::items_after_statements)]
         fn test_invalid_flag(kind: u8) {
@@ -643,7 +726,7 @@ mod test {
             };
             let mut reader = Reader::new(full.as_slice());
             assert!(Header::parse(&mut reader)
-                .is_err_and(|e| e.is_stream_err_kind(UnknownFlagType { flag: kind })));
+                .is_err_and(|e| e.is_chunk_err_kind(UnknownTypeFlag { flag: kind })));
         }
 
         for flag in [0, 5, 8, 12] {
