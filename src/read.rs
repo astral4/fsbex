@@ -36,7 +36,7 @@ impl<R: Read> Reader<R> {
                 ErrorKind::UnexpectedEof => {
                     Err(self.to_error(ReadErrorKind::Incomplete(Needed::Unknown)))
                 }
-                _ => Err(self.to_error(ReadErrorKind::Failure(e))),
+                _ => Err(self.to_error_with_source(ReadErrorKind::Failure, e)),
             },
         }
     }
@@ -61,7 +61,7 @@ impl<R: Read> Reader<R> {
                 ErrorKind::UnexpectedEof => {
                     Err(self.to_error(ReadErrorKind::Incomplete(Needed::Unknown)))
                 }
-                _ => Err(self.to_error(ReadErrorKind::Failure(e))),
+                _ => Err(self.to_error_with_source(ReadErrorKind::Failure, e)),
             },
         }
     }
@@ -113,19 +113,19 @@ impl<R: Read> Reader<R> {
 type ReadResult<T> = Result<T, ReadError>;
 
 #[derive(Debug)]
-#[cfg_attr(test, derive(PartialEq))]
 pub(crate) struct ReadError {
     position: usize,
     kind: ReadErrorKind,
+    source: Option<IoError>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ReadErrorKind {
-    Failure(IoError),
+    Failure,
     Incomplete(Needed),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Needed {
     Size(NonZeroUsize),
     Unknown,
@@ -136,6 +136,15 @@ impl<R: Read> Reader<R> {
         ReadError {
             position: self.position,
             kind,
+            source: None,
+        }
+    }
+
+    fn to_error_with_source(&self, kind: ReadErrorKind, source: IoError) -> ReadError {
+        ReadError {
+            position: self.position,
+            kind,
+            source: Some(source),
         }
     }
 }
@@ -147,36 +156,27 @@ impl ReadError {
     }
 }
 
-#[cfg(test)]
-impl PartialEq for ReadErrorKind {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Failure(first), Self::Failure(second)) => first.kind() == second.kind(),
-            (Self::Incomplete(first), Self::Incomplete(second)) => first == second,
-            _ => false,
-        }
-    }
-}
-
 impl Display for ReadError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match &self.kind {
-            ReadErrorKind::Failure(_) => f.write_str("failed to read data due to I/O error"),
+            ReadErrorKind::Failure => f.write_str("failed to read data due to I/O error"),
             ReadErrorKind::Incomplete(needed) => match needed {
                 Needed::Size(size) => {
                     f.write_str(&format!("incomplete data: needed {size} more bytes to read"))
                 }
                 Needed::Unknown => f.write_str("incomplete data"),
             },
-        }
+        }?;
+
+        f.write_str(&format!(" - byte position {}", self.position))
     }
 }
 
 impl Error for ReadError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match &self.kind {
-            ReadErrorKind::Failure(err) => Some(err),
-            ReadErrorKind::Incomplete(_) => None,
+        match &self.source {
+            Some(e) => Some(e),
+            None => None,
         }
     }
 }
@@ -194,10 +194,10 @@ mod test {
         let data = b"abc123";
         let mut reader = Reader::new(data.as_slice());
 
-        assert_eq!(reader.take(), Ok([97]));
-        assert_eq!(reader.take(), Ok([98, 99]));
-        assert_eq!(reader.take(), Ok([49, 50, 51]));
-        assert_eq!(reader.take(), Ok([]));
+        assert_eq!(reader.take().unwrap(), [97]);
+        assert_eq!(reader.take().unwrap(), [98, 99]);
+        assert_eq!(reader.take().unwrap(), [49, 50, 51]);
+        assert_eq!(reader.take().unwrap(), []);
         assert!(reader
             .take::<1>()
             .is_err_and(|e| e
@@ -209,10 +209,10 @@ mod test {
         let data = b"abc123";
         let mut reader = Reader::new(data.as_slice());
 
-        assert_eq!(reader.skip(1), Ok(()));
-        assert_eq!(reader.skip(2), Ok(()));
-        assert_eq!(reader.skip(3), Ok(()));
-        assert_eq!(reader.skip(0), Ok(()));
+        assert!(reader.skip(1).is_ok());
+        assert!(reader.skip(2).is_ok());
+        assert!(reader.skip(3).is_ok());
+        assert!(reader.skip(0).is_ok());
         assert!(reader
             .skip(1)
             .is_err_and(|e| e
@@ -224,13 +224,13 @@ mod test {
         let data = b"abc123";
         let mut reader = Reader::new(data.as_slice());
 
-        assert_eq!(reader.advance_to(0), Ok(()));
+        assert!(reader.advance_to(0).is_ok());
         assert_eq!(reader.position(), 0);
 
-        assert_eq!(reader.advance_to(2), Ok(()));
+        assert!(reader.advance_to(2).is_ok());
         assert_eq!(reader.position(), 2);
 
-        assert_eq!(reader.advance_to(6), Ok(()));
+        assert!(reader.advance_to(6).is_ok());
         assert_eq!(reader.position(), 6);
 
         assert!(reader
@@ -244,7 +244,7 @@ mod test {
         let data = b"\x00\x00\x00\x00\x00\x00";
         let mut reader = Reader::new(data.as_slice());
 
-        assert_eq!(reader.le_u32(), Ok(0));
+        assert_eq!(reader.le_u32().unwrap(), 0);
     }
 
     #[test]
@@ -252,10 +252,10 @@ mod test {
         let data = b"\x11\x00\x00\x00\x34\x12\x00\x00\x66\x66\x66\x66\xFF\xFF\xFF\xFF";
         let mut reader = Reader::new(data.as_slice());
 
-        assert_eq!(reader.le_u32(), Ok(17));
-        assert_eq!(reader.le_u32(), Ok(4660));
-        assert_eq!(reader.le_u32(), Ok(1_717_986_918));
-        assert_eq!(reader.le_u32(), Ok(u32::MAX));
+        assert_eq!(reader.le_u32().unwrap(), 17);
+        assert_eq!(reader.le_u32().unwrap(), 4660);
+        assert_eq!(reader.le_u32().unwrap(), 1_717_986_918);
+        assert_eq!(reader.le_u32().unwrap(), u32::MAX);
     }
 
     #[test]
@@ -263,10 +263,10 @@ mod test {
         let data = b"\x11\x00\x00\x00\x00\x00\x00\xFF\xFF\x22";
         let mut reader = Reader::new(data.as_slice());
 
-        assert_eq!(reader.le_u32(), Ok(17));
-        assert_eq!(reader.u8(), Ok(0));
-        assert_eq!(reader.le_i32(), Ok(-65536));
-        assert_eq!(reader.u8(), Ok(34));
+        assert_eq!(reader.le_u32().unwrap(), 17);
+        assert_eq!(reader.u8().unwrap(), 0);
+        assert_eq!(reader.le_i32().unwrap(), -65536);
+        assert_eq!(reader.u8().unwrap(), 34);
     }
 
     #[test]
@@ -321,7 +321,7 @@ mod test {
     fn handle_interrupted_io() {
         let mut reader = Reader::new(InterruptReader(0));
 
-        assert_eq!(reader.unit(), Ok(()));
+        assert!(reader.unit().is_ok());
     }
 
     struct EofReader;
@@ -373,8 +373,6 @@ mod test {
     fn handle_misc_io_error() {
         let mut reader = Reader::new(UnsupportedReader);
 
-        assert!(reader.unit().is_err_and(
-            |e| e.is_kind(ReadErrorKind::Failure(IoError::from(ErrorKind::Unsupported)))
-        ));
+        assert!(reader.unit().is_err_and(|e| e.is_kind(ReadErrorKind::Failure)));
     }
 }
