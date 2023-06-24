@@ -58,11 +58,7 @@ impl Header {
             }?;
 
             if mode.has_chunks {
-                let chunk = match reader.le_u32() {
-                    Ok(n) => RawSampleChunk::from(n).parse(0),
-                    Err(e) => Err(ChunkError::new_with_source(0, ChunkErrorKind::Flag, e)),
-                }
-                .map_err(|e| e.into_stream_err(index))?;
+                parse_sample_chunks(reader).map_err(|e| e.into_stream_err(index))?;
             }
         }
 
@@ -157,6 +153,15 @@ impl RawSampleMode {
             num_samples,
         })
     }
+}
+
+fn parse_sample_chunks<R: Read>(reader: &mut Reader<R>) -> Result<(), ChunkError> {
+    let chunk = match reader.le_u32() {
+        Ok(n) => RawSampleChunk::from(n).parse(0),
+        Err(e) => Err(ChunkError::new_with_source(0, ChunkErrorKind::Flag, e)),
+    }?;
+
+    todo!()
 }
 
 #[bitsize(32)]
