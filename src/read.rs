@@ -26,15 +26,17 @@ impl<R: Read> Reader<R> {
                 if n == LEN {
                     Ok(())
                 } else {
-                    Err(ReadError::Incomplete(Needed::Size(
+                    Err(self.to_error(ReadErrorKind::Incomplete(Needed::Size(
                         NonZeroUsize::new(LEN - n).expect("n is guaranteed to not equal LEN"),
-                    )))
+                    ))))
                 }
             }
             Err(e) => match e.kind() {
                 ErrorKind::Interrupted => self.read_to_array(buf),
-                ErrorKind::UnexpectedEof => Err(ReadError::Incomplete(Needed::Unknown)),
-                _ => Err(ReadError::Failure(e)),
+                ErrorKind::UnexpectedEof => {
+                    Err(self.to_error(ReadErrorKind::Incomplete(Needed::Unknown)))
+                }
+                _ => Err(self.to_error(ReadErrorKind::Failure(e))),
             },
         }
     }
@@ -48,16 +50,18 @@ impl<R: Read> Reader<R> {
                 if n == buf_len {
                     Ok(())
                 } else {
-                    Err(ReadError::Incomplete(Needed::Size(
+                    Err(self.to_error(ReadErrorKind::Incomplete(Needed::Size(
                         NonZeroUsize::new(buf_len - n)
                             .expect("n is guaranteed to not equal buf_len"),
-                    )))
+                    ))))
                 }
             }
             Err(e) => match e.kind() {
                 ErrorKind::Interrupted => self.read_to_slice(buf),
-                ErrorKind::UnexpectedEof => Err(ReadError::Incomplete(Needed::Unknown)),
-                _ => Err(ReadError::Failure(e)),
+                ErrorKind::UnexpectedEof => {
+                    Err(self.to_error(ReadErrorKind::Incomplete(Needed::Unknown)))
+                }
+                _ => Err(self.to_error(ReadErrorKind::Failure(e))),
             },
         }
     }
@@ -109,13 +113,42 @@ impl<R: Read> Reader<R> {
 type ReadResult<T> = Result<T, ReadError>;
 
 #[derive(Debug)]
-pub(crate) enum ReadError {
+#[cfg_attr(test, derive(PartialEq))]
+pub(crate) struct ReadError {
+    position: usize,
+    kind: ReadErrorKind,
+}
+
+#[derive(Debug)]
+pub(crate) enum ReadErrorKind {
     Failure(IoError),
     Incomplete(Needed),
 }
 
+#[derive(Debug, PartialEq)]
+pub(crate) enum Needed {
+    Size(NonZeroUsize),
+    Unknown,
+}
+
+impl<R: Read> Reader<R> {
+    fn to_error(&self, kind: ReadErrorKind) -> ReadError {
+        ReadError {
+            position: self.position,
+            kind,
+        }
+    }
+}
+
 #[cfg(test)]
-impl PartialEq for ReadError {
+impl ReadError {
+    fn is_kind(&self, kind: ReadErrorKind) -> bool {
+        self.kind == kind
+    }
+}
+
+#[cfg(test)]
+impl PartialEq for ReadErrorKind {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Failure(first), Self::Failure(second)) => first.kind() == second.kind(),
@@ -125,17 +158,11 @@ impl PartialEq for ReadError {
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub(crate) enum Needed {
-    Size(NonZeroUsize),
-    Unknown,
-}
-
 impl Display for ReadError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        match self {
-            Self::Failure(_) => f.write_str("failed to read data due to I/O error"),
-            Self::Incomplete(needed) => match needed {
+        match &self.kind {
+            ReadErrorKind::Failure(_) => f.write_str("failed to read data due to I/O error"),
+            ReadErrorKind::Incomplete(needed) => match needed {
                 Needed::Size(size) => {
                     f.write_str(&format!("incomplete data: needed {size} more bytes to read"))
                 }
@@ -147,16 +174,16 @@ impl Display for ReadError {
 
 impl Error for ReadError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            Self::Failure(err) => Some(err),
-            Self::Incomplete(_) => None,
+        match &self.kind {
+            ReadErrorKind::Failure(err) => Some(err),
+            ReadErrorKind::Incomplete(_) => None,
         }
     }
 }
 
 #[cfg(test)]
 mod test {
-    use super::{Needed, ReadError, ReadResult, Reader};
+    use super::{Needed, ReadErrorKind, ReadResult, Reader};
     use std::{
         io::{Error as IoError, ErrorKind, Read, Result as IoResult},
         num::NonZeroUsize,
@@ -171,10 +198,10 @@ mod test {
         assert_eq!(reader.take(), Ok([98, 99]));
         assert_eq!(reader.take(), Ok([49, 50, 51]));
         assert_eq!(reader.take(), Ok([]));
-        assert_eq!(
-            reader.take::<1>(),
-            Err(ReadError::Incomplete(Needed::Size(NonZeroUsize::new(1).unwrap())))
-        );
+        assert!(reader
+            .take::<1>()
+            .is_err_and(|e| e
+                .is_kind(ReadErrorKind::Incomplete(Needed::Size(NonZeroUsize::new(1).unwrap())))));
     }
 
     #[test]
@@ -186,10 +213,10 @@ mod test {
         assert_eq!(reader.skip(2), Ok(()));
         assert_eq!(reader.skip(3), Ok(()));
         assert_eq!(reader.skip(0), Ok(()));
-        assert_eq!(
-            reader.skip(1),
-            Err(ReadError::Incomplete(Needed::Size(NonZeroUsize::new(1).unwrap())))
-        );
+        assert!(reader
+            .skip(1)
+            .is_err_and(|e| e
+                .is_kind(ReadErrorKind::Incomplete(Needed::Size(NonZeroUsize::new(1).unwrap())))));
     }
 
     #[test]
@@ -206,10 +233,10 @@ mod test {
         assert_eq!(reader.advance_to(6), Ok(()));
         assert_eq!(reader.position(), 6);
 
-        assert_eq!(
-            reader.advance_to(10),
-            Err(ReadError::Incomplete(Needed::Size(NonZeroUsize::new(4).unwrap())))
-        );
+        assert!(reader
+            .advance_to(10)
+            .is_err_and(|e| e
+                .is_kind(ReadErrorKind::Incomplete(Needed::Size(NonZeroUsize::new(4).unwrap())))));
     }
 
     #[test]
@@ -247,10 +274,10 @@ mod test {
         let data = b"\x00\x00";
         let mut reader = Reader::new(data.as_slice());
 
-        assert_eq!(
-            reader.le_u32(),
-            Err(ReadError::Incomplete(Needed::Size(NonZeroUsize::new(2).unwrap())))
-        );
+        assert!(reader
+            .le_u32()
+            .is_err_and(|e| e
+                .is_kind(ReadErrorKind::Incomplete(Needed::Size(NonZeroUsize::new(2).unwrap())))));
     }
 
     impl<R: Read> Reader<R> {
@@ -319,7 +346,9 @@ mod test {
     fn handle_unexpected_eof() {
         let mut reader = Reader::new(EofReader);
 
-        assert_eq!(reader.unit(), Err(ReadError::Incomplete(Needed::Unknown)));
+        assert!(reader
+            .unit()
+            .is_err_and(|e| e.is_kind(ReadErrorKind::Incomplete(Needed::Unknown))));
     }
 
     struct UnsupportedReader;
@@ -344,9 +373,8 @@ mod test {
     fn handle_misc_io_error() {
         let mut reader = Reader::new(UnsupportedReader);
 
-        assert_eq!(
-            reader.unit(),
-            Err(ReadError::Failure(IoError::from(ErrorKind::Unsupported)))
-        );
+        assert!(reader.unit().is_err_and(
+            |e| e.is_kind(ReadErrorKind::Failure(IoError::from(ErrorKind::Unsupported)))
+        ));
     }
 }
