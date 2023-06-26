@@ -301,7 +301,7 @@ fn parse_sample_chunks<R: Read>(
                 },
             ))?;
 
-        if chunk.is_end {
+        if !chunk.more_chunks {
             break;
         }
     }
@@ -312,13 +312,13 @@ fn parse_sample_chunks<R: Read>(
 #[bitsize(32)]
 #[derive(FromBits)]
 struct RawSampleChunk {
-    is_end: bool,
+    more_chunks: bool,
     size: u24,
     kind: u7,
 }
 
 struct SampleChunk {
-    is_end: bool,
+    more_chunks: bool,
     size: u32,
     kind: SampleChunkKind,
 }
@@ -360,7 +360,7 @@ impl RawSampleChunk {
         }?;
 
         Ok(SampleChunk {
-            is_end: self.is_end(),
+            more_chunks: self.more_chunks(),
             size: self.size().value(),
             kind,
         })
@@ -599,8 +599,8 @@ mod test {
 
         let flags = RawSampleChunk::from(data);
 
-        let is_end = (data & 0x01) == 1;
-        assert_eq!(flags.is_end(), is_end);
+        let more_chunks = (data & 0x01) == 1;
+        assert_eq!(flags.more_chunks(), more_chunks);
 
         let size = (data >> 1) & 0x00FF_FFFF;
         assert_eq!(flags.size().value(), size);
