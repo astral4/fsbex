@@ -21,6 +21,7 @@ pub(crate) enum HeaderErrorKind {
     NameTableSize,
     SampleDataSize,
     Codec,
+    UnknownCodec { flag: u32 },
     Metadata,
     Stream,
 }
@@ -85,7 +86,10 @@ impl Display for HeaderError {
             SampleHeaderSize => f.write_str("failed to read size of sample header"),
             NameTableSize => f.write_str("failed to read size of name table"),
             SampleDataSize => f.write_str("failed to read size of sample data"),
-            Codec => f.write_str("failed to parse codec"),
+            Codec => f.write_str("failed to read codec flag"),
+            UnknownCodec { flag } => {
+                f.write_str(&format!("codec flag was not recognized (0x{flag:08x})"))
+            }
             Metadata => f.write_str("failed to read (unused) metadata bytes"),
             Stream => f.write_str("failed to parse stream header"),
         }
@@ -114,7 +118,7 @@ pub(crate) struct StreamError {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum StreamErrorKind {
     SampleMode,
-    SampleRateFlag { flag: u8 },
+    UnknownSampleRate { flag: u8 },
     ZeroDataOffset,
     ZeroSamples,
     Chunk,
@@ -168,7 +172,7 @@ impl Display for StreamError {
 
         match self.kind {
             SampleMode => f.write_str("failed to read sample mode"),
-            SampleRateFlag { flag } => {
+            UnknownSampleRate { flag } => {
                 f.write_str(&format!("sample rate flag was not recognized (0x{flag:02x})"))
             }
             ZeroDataOffset => f.write_str("sample data offset was 0"),
@@ -202,7 +206,7 @@ pub(crate) struct ChunkError {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ChunkErrorKind {
     Flag,
-    UnknownTypeFlag { flag: u8 },
+    UnknownType { flag: u8 },
     Channels,
     SampleRate,
     ZeroSampleRate,
@@ -252,8 +256,8 @@ impl Display for ChunkError {
 
         match self.kind {
             Flag => f.write_str("failed to read chunk flag"),
-            UnknownTypeFlag { flag } => {
-                f.write_str(&format!("type of chunk flag was not recognized (0x{flag:02x})"))
+            UnknownType { flag } => {
+                f.write_str(&format!("chunk type flag was not recognized (0x{flag:02x})"))
             }
             Channels => f.write_str("failed to read number of channels"),
             SampleRate => f.write_str("failed to read sample rate"),

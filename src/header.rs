@@ -17,8 +17,8 @@ impl Header {
 
         let version = reader
             .le_u32()
-            .map_err(HeaderError::factory(HeaderErrorKind::Version))
-            .and_then(Version::parse)?;
+            .map_err(HeaderError::factory(HeaderErrorKind::Version))?
+            .try_into()?;
 
         let total_subsongs: NonZeroU32 = reader
             .le_u32()
@@ -38,9 +38,10 @@ impl Header {
             .le_u32()
             .map_err(HeaderError::factory(HeaderErrorKind::SampleDataSize))?;
 
-        let codec = reader
+        let codec: Codec = reader
             .le_u32()
-            .map_err(HeaderError::factory(HeaderErrorKind::Codec))?;
+            .map_err(HeaderError::factory(HeaderErrorKind::Codec))?
+            .try_into()?;
 
         let base_header_size = match version {
             Version::V0 => 60,
@@ -73,12 +74,61 @@ enum Version {
     V1,
 }
 
-impl Version {
-    fn parse(num: u32) -> Result<Self, HeaderError> {
-        match num {
+impl TryFrom<u32> for Version {
+    type Error = HeaderError;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
             0 => Ok(Self::V0),
             1 => Ok(Self::V1),
             version => Err(HeaderError::new(HeaderErrorKind::UnknownVersion { version })),
+        }
+    }
+}
+
+enum Codec {
+    Pcm8,
+    Pcm16,
+    Pcm24,
+    Pcm32,
+    PcmFloat,
+    GcAdpcm,
+    ImaAdpcm,
+    Vag,
+    HeVag,
+    Xma,
+    Mpeg,
+    Celt,
+    Atrac9,
+    Xwma,
+    Vorbis,
+    FAdpcm,
+    Opus,
+}
+
+impl TryFrom<u32> for Codec {
+    type Error = HeaderError;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(Self::Pcm8),
+            2 => Ok(Self::Pcm16),
+            3 => Ok(Self::Pcm24),
+            4 => Ok(Self::Pcm32),
+            5 => Ok(Self::PcmFloat),
+            6 => Ok(Self::GcAdpcm),
+            7 => Ok(Self::ImaAdpcm),
+            8 => Ok(Self::Vag),
+            9 => Ok(Self::HeVag),
+            10 => Ok(Self::Xma),
+            11 => Ok(Self::Mpeg),
+            12 => Ok(Self::Celt),
+            13 => Ok(Self::Atrac9),
+            14 => Ok(Self::Xwma),
+            15 => Ok(Self::Vorbis),
+            16 => Ok(Self::FAdpcm),
+            17 => Ok(Self::Opus),
+            flag => Err(HeaderError::new(HeaderErrorKind::UnknownCodec { flag })),
         }
     }
 }
@@ -118,7 +168,7 @@ impl RawSampleMode {
             10 => Ok(96000),
             flag => Err(StreamError::new(
                 stream_index,
-                StreamErrorKind::SampleRateFlag { flag },
+                StreamErrorKind::UnknownSampleRate { flag },
             )),
         }?
         .try_into()
@@ -306,7 +356,7 @@ impl RawSampleChunk {
             13 => Ok(PeakVolume),
             14 => Ok(VorbisIntraLayers),
             15 => Ok(OpusDataSize),
-            flag => Err(ChunkError::new(chunk_index, ChunkErrorKind::UnknownTypeFlag { flag })),
+            flag => Err(ChunkError::new(chunk_index, ChunkErrorKind::UnknownType { flag })),
         }?;
 
         Ok(SampleChunk {
@@ -436,25 +486,29 @@ mod test {
         reader = Reader::new(data.as_slice());
         assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == Codec));
 
-        let data = b"FSB5\x01\x00\x00\x0000000000000000000000";
+        let data = b"FSB5\x01\x00\x00\x000000000000000000\x00\x00\x00\x00";
+        reader = Reader::new(data.as_slice());
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == UnknownCodec { flag: 0 }));
+
+        let data = b"FSB5\x01\x00\x00\x000000000000000000\x01\x00\x00\x00";
         reader = Reader::new(data.as_slice());
         assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == Metadata));
     }
 
     #[test]
     fn read_metadata() {
-        const V0_HEADER_BASE: [u8; 12] = *b"FSB5\x00\x00\x00\x000000";
-        const V1_HEADER_BASE: [u8; 12] = *b"FSB5\x01\x00\x00\x000000";
+        const V0_HEADER_BASE: [u8; 28] = *b"FSB5\x00\x00\x00\x000000000000000000\x01\x00\x00\x00";
+        const V1_HEADER_BASE: [u8; 28] = *b"FSB5\x01\x00\x00\x000000000000000000\x01\x00\x00\x00";
 
         let mut reader;
 
-        let incomplete_data = b"FSB5\x01\x00\x00\x0000000000000000000000\x00";
+        let incomplete_data = b"FSB5\x01\x00\x00\x000000000000000000\x01\x00\x00\x00\x00";
         reader = Reader::new(incomplete_data.as_slice());
         assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == Metadata));
 
         let err_v1_data = {
             let mut buf = Vec::from(V1_HEADER_BASE);
-            buf.append(&mut vec![0; 48]);
+            buf.append(&mut vec![0; 32]);
             buf
         };
         reader = Reader::new(&err_v1_data);
@@ -462,7 +516,7 @@ mod test {
 
         let ok_v0_data = {
             let mut buf = Vec::from(V0_HEADER_BASE);
-            buf.append(&mut vec![0; 48]);
+            buf.append(&mut vec![0; 32]);
             buf
         };
         reader = Reader::new(&ok_v0_data);
@@ -470,7 +524,7 @@ mod test {
 
         let ok_v1_data = {
             let mut buf = Vec::from(V1_HEADER_BASE);
-            buf.append(&mut vec![0; 52]);
+            buf.append(&mut vec![0; 36]);
             buf
         };
         reader = Reader::new(&ok_v1_data);
@@ -479,7 +533,7 @@ mod test {
 
     #[test]
     fn read_stream_mode() {
-        let data = b"FSB5\x01\x00\x00\x00\x01\x00\x00\x0000000000000000000000000000000000000000000000000000000000";
+        let data = b"FSB5\x01\x00\x00\x00\x01\x00\x00\x00000000000000\x01\x00\x00\x000000000000000000000000000000000000000000";
         let mut reader = Reader::new(data.as_slice());
         assert!(Header::parse(&mut reader).is_err_and(|e| e.is_stream_err_kind(SampleMode)));
     }
@@ -514,7 +568,7 @@ mod test {
         let mode = RawSampleMode::from(data);
         assert!(mode
             .parse(0)
-            .is_err_and(|e| e.kind() == SampleRateFlag { flag: 0b1110 }));
+            .is_err_and(|e| e.kind() == UnknownSampleRate { flag: 0b1110 }));
 
         let data = 0b011010000101100111100000001011_000000000000000000000000000_11_0000_0;
         let mode = RawSampleMode::from(data);
@@ -557,7 +611,7 @@ mod test {
 
     #[test]
     fn parse_sample_chunk() {
-        const DATA: &[u8; 72] = b"FSB5\x01\x00\x00\x00\x01\x00\x00\x000000000000000000000000000000000000000000000000000000\x010000000";
+        const DATA: &[u8; 72] = b"FSB5\x01\x00\x00\x00\x01\x00\x00\x00000000000000\x01\x00\x00\x00000000000000000000000000000000000000\x010000000";
 
         let mut reader;
 
@@ -576,7 +630,7 @@ mod test {
             };
             let mut reader = Reader::new(full.as_slice());
             assert!(Header::parse(&mut reader)
-                .is_err_and(|e| e.is_chunk_err_kind(UnknownTypeFlag { flag: kind })));
+                .is_err_and(|e| e.is_chunk_err_kind(UnknownType { flag: kind })));
         }
 
         for flag in [0, 5, 8, 12] {
