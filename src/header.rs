@@ -52,13 +52,13 @@ impl Header {
             .map_err(HeaderError::factory(HeaderErrorKind::Metadata))?;
 
         for index in 0..total_subsongs.into() {
-            let mode = match reader.le_u64() {
+            let mut mode = match reader.le_u64() {
                 Ok(n) => RawSampleMode::from(n).parse(index),
                 Err(e) => Err(StreamError::new_with_source(index, StreamErrorKind::SampleMode, e)),
             }?;
 
             if mode.has_chunks {
-                parse_sample_chunks(reader).map_err(|e| e.into_stream_err(index))?;
+                parse_sample_chunks(reader, &mut mode).map_err(|e| e.into_stream_err(index))?;
             }
         }
 
@@ -155,13 +155,102 @@ impl RawSampleMode {
     }
 }
 
-fn parse_sample_chunks<R: Read>(reader: &mut Reader<R>) -> Result<(), ChunkError> {
-    let chunk = match reader.le_u32() {
-        Ok(n) => RawSampleChunk::from(n).parse(0),
-        Err(e) => Err(ChunkError::new_with_source(0, ChunkErrorKind::Flag, e)),
-    }?;
+fn parse_sample_chunks<R: Read>(
+    reader: &mut Reader<R>,
+    sample: &mut SampleMode,
+) -> Result<(), ChunkError> {
+    use crate::header::Loop;
+    #[allow(clippy::enum_glob_use)]
+    use SampleChunkKind::*;
 
-    todo!()
+    for index in 0.. {
+        let chunk = match reader.le_u32() {
+            Ok(n) => RawSampleChunk::from(n).parse(index),
+            Err(e) => Err(ChunkError::new_with_source(index, ChunkErrorKind::Flag, e)),
+        }?;
+
+        let start_position = reader.position();
+
+        match chunk.kind {
+            Channels => {
+                sample.channels = reader
+                    .u8()
+                    .map_err(ChunkError::factory(index, ChunkErrorKind::Channels))?;
+            }
+            SampleRate => {
+                sample.sample_rate = reader
+                    .le_u32()
+                    .map_err(ChunkError::factory(index, ChunkErrorKind::SampleRate))?
+                    .try_into()
+                    .map_err(|_| ChunkError::new(index, ChunkErrorKind::ZeroSampleRate))?;
+            }
+            Loop => {
+                let start = reader
+                    .le_u32()
+                    .map_err(ChunkError::factory(index, ChunkErrorKind::LoopStart))?;
+
+                let end = reader
+                    .le_u32()
+                    .map_err(ChunkError::factory(index, ChunkErrorKind::LoopEnd))?;
+
+                let sample_loop = Loop::parse(index, start, end)?;
+
+                todo!()
+            }
+            DspCoefficients => {
+                let channels = sample.channels;
+
+                let mut dsp_coeffs = Vec::with_capacity(channels as usize);
+
+                for _ in 0..channels {
+                    let mut coeff = 0;
+
+                    for _ in 0..16 {
+                        coeff += reader
+                            .be_i16()
+                            .map_err(ChunkError::factory(index, ChunkErrorKind::DspCoefficients))?;
+                    }
+
+                    reader
+                        .skip(14)
+                        .map_err(ChunkError::factory(index, ChunkErrorKind::DspCoefficients))?;
+
+                    dsp_coeffs.push(coeff);
+                }
+
+                todo!()
+            }
+            Atrac9Config => {
+                todo!()
+            }
+            XwmaConfig => {
+                todo!()
+            }
+            VorbisSeekTable => {
+                todo!()
+            }
+            VorbisIntraLayers => {
+                let layers: u8 = reader
+                    .le_u32()
+                    .map_err(ChunkError::factory(index, ChunkErrorKind::VorbisLayers))?
+                    .try_into()
+                    .map_err(|_| ChunkError::new(index, ChunkErrorKind::TooManyVorbisLayers))?;
+
+                sample.channels *= layers;
+            }
+            _ => {}
+        }
+
+        reader
+            .advance_to(start_position + chunk.size as usize)
+            .map_err(ChunkError::factory(index, ChunkErrorKind::WrongChunkSize))?;
+
+        if chunk.is_end {
+            break;
+        }
+    }
+
+    Ok(())
 }
 
 #[bitsize(32)]
@@ -219,6 +308,20 @@ impl RawSampleChunk {
             size: self.size().value(),
             kind,
         })
+    }
+}
+
+struct Loop {
+    start: u32,
+    len: NonZeroU32,
+}
+
+impl Loop {
+    fn parse(index: u32, start: u32, end: u32) -> Result<Self, ChunkError> {
+        let len = NonZeroU32::new(end - start)
+            .ok_or_else(|| ChunkError::new(index, ChunkErrorKind::ZeroLengthLoop))?;
+
+        Ok(Self { start, len })
     }
 }
 

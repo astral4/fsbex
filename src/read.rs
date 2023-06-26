@@ -66,7 +66,7 @@ impl<R: Read> Reader<R> {
         }
     }
 
-    fn position(&self) -> usize {
+    pub(crate) fn position(&self) -> usize {
         self.position
     }
 
@@ -107,6 +107,12 @@ impl<R: Read> Reader<R> {
         let mut buf = [0; 4];
         Self::read_to_array(self, &mut buf)?;
         Ok(i32::from_le_bytes(buf))
+    }
+
+    pub(crate) fn be_i16(&mut self) -> ReadResult<i16> {
+        let mut buf = [0; 2];
+        Self::read_to_array(self, &mut buf)?;
+        Ok(i16::from_be_bytes(buf))
     }
 }
 

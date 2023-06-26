@@ -203,6 +203,16 @@ pub(crate) struct ChunkError {
 pub(crate) enum ChunkErrorKind {
     Flag,
     UnknownTypeFlag { flag: u8 },
+    Channels,
+    SampleRate,
+    ZeroSampleRate,
+    LoopStart,
+    LoopEnd,
+    ZeroLengthLoop,
+    DspCoefficients,
+    VorbisLayers,
+    TooManyVorbisLayers,
+    WrongChunkSize,
 }
 
 impl ChunkError {
@@ -244,6 +254,22 @@ impl Display for ChunkError {
             Flag => f.write_str("failed to read chunk flag"),
             UnknownTypeFlag { flag } => {
                 f.write_str(&format!("type of chunk flag was not recognized (0x{flag:02x})"))
+            }
+            Channels => f.write_str("failed to read number of channels"),
+            SampleRate => f.write_str("failed to read sample rate"),
+            ZeroSampleRate => f.write_str("sample rate was 0"),
+            LoopStart => f.write_str("failed to read starting position of loop in sample"),
+            LoopEnd => f.write_str("failed to read ending position of loop in sample"),
+            ZeroLengthLoop => f.write_str("length of loop in sample was 0"),
+            DspCoefficients => f.write_str("failed to read sample DSP coefficients"),
+            VorbisLayers => {
+                f.write_str("failed to read number of layers per channel in Vorbis sample")
+            }
+            TooManyVorbisLayers => {
+                f.write_str("number of layers in Vorbis sample was greater than 255")
+            }
+            WrongChunkSize => {
+                f.write_str("reported sample chunk size was smaller than actual size")
             }
         }?;
 
