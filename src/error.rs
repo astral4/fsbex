@@ -272,7 +272,7 @@ impl Display for ChunkError {
             TooManyVorbisLayers { layers } => f.write_str(&format!(
                 "number of layers in Vorbis sample was greater than 255 ({layers} layers)"
             )),
-            WrongChunkSize { expected, actual }=> {
+            WrongChunkSize { expected, actual } => {
                 f.write_str(&format!("expected sample chunk size ({expected} bytes) was smaller than actual size ({actual} bytes)"))
             }
         }?;
