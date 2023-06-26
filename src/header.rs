@@ -198,11 +198,9 @@ fn parse_sample_chunks<R: Read>(
                 todo!()
             }
             DspCoefficients => {
-                let channels = sample.channels;
+                let mut dsp_coeffs = Vec::with_capacity(sample.channels as usize);
 
-                let mut dsp_coeffs = Vec::with_capacity(channels as usize);
-
-                for _ in 0..channels {
+                for _ in 0..sample.channels {
                     let mut coeff = 0;
 
                     for _ in 0..16 {
@@ -230,11 +228,13 @@ fn parse_sample_chunks<R: Read>(
                 todo!()
             }
             VorbisIntraLayers => {
-                let layers: u8 = reader
+                let layers = reader
                     .le_u32()
-                    .map_err(ChunkError::factory(index, ChunkErrorKind::VorbisLayers))?
-                    .try_into()
-                    .map_err(|_| ChunkError::new(index, ChunkErrorKind::TooManyVorbisLayers))?;
+                    .map_err(ChunkError::factory(index, ChunkErrorKind::VorbisLayers))?;
+
+                let layers: u8 = layers.try_into().map_err(|_| {
+                    ChunkError::new(index, ChunkErrorKind::TooManyVorbisLayers { layers })
+                })?;
 
                 sample.channels *= layers;
             }
@@ -243,7 +243,13 @@ fn parse_sample_chunks<R: Read>(
 
         reader
             .advance_to(start_position + chunk.size as usize)
-            .map_err(ChunkError::factory(index, ChunkErrorKind::WrongChunkSize))?;
+            .map_err(ChunkError::factory(
+                index,
+                ChunkErrorKind::WrongChunkSize {
+                    expected: chunk.size,
+                    actual: reader.position() - start_position,
+                },
+            ))?;
 
         if chunk.is_end {
             break;

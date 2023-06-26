@@ -211,8 +211,8 @@ pub(crate) enum ChunkErrorKind {
     ZeroLengthLoop,
     DspCoefficients,
     VorbisLayers,
-    TooManyVorbisLayers,
-    WrongChunkSize,
+    TooManyVorbisLayers { layers: u32 },
+    WrongChunkSize { expected: u32, actual: usize },
 }
 
 impl ChunkError {
@@ -265,11 +265,11 @@ impl Display for ChunkError {
             VorbisLayers => {
                 f.write_str("failed to read number of layers per channel in Vorbis sample")
             }
-            TooManyVorbisLayers => {
-                f.write_str("number of layers in Vorbis sample was greater than 255")
-            }
-            WrongChunkSize => {
-                f.write_str("reported sample chunk size was smaller than actual size")
+            TooManyVorbisLayers { layers } => f.write_str(&format!(
+                "number of layers in Vorbis sample was greater than 255 ({layers} layers)"
+            )),
+            WrongChunkSize { expected, actual }=> {
+                f.write_str(&format!("expected sample chunk size ({expected} bytes) was smaller than actual size ({actual} bytes)"))
             }
         }?;
 
