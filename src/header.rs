@@ -56,6 +56,8 @@ impl Header {
             .advance_to(base_header_size)
             .map_err(HeaderError::factory(HeaderErrorKind::Metadata))?;
 
+        let mut stream_info: Vec<StreamInfo> = Vec::with_capacity(u32::from(num_streams) as usize);
+
         for index in 0..num_streams.into() {
             let mut stream_header = match reader.le_u64() {
                 Ok(n) => RawStreamHeader::from(n).parse(index),
@@ -66,6 +68,8 @@ impl Header {
                 parse_stream_chunks(reader, &mut stream_header)
                     .map_err(|e| e.into_stream_err(index))?;
             }
+
+            stream_info.push(stream_header.into());
         }
 
         let header_size = base_header_size + stream_headers_size as usize;
@@ -164,6 +168,8 @@ struct StreamHeader {
     channels: NonZeroU8,
     data_offset: NonZeroU32,
     num_samples: NonZeroU32,
+    stream_loop: Option<Loop>,
+    dsp_coeffs: Option<Box<[i16]>>,
 }
 
 impl RawStreamHeader {
@@ -217,6 +223,8 @@ impl RawStreamHeader {
             channels,
             data_offset,
             num_samples,
+            stream_loop: None,
+            dsp_coeffs: None,
         })
     }
 }
@@ -261,9 +269,7 @@ fn parse_stream_chunks<R: Read>(
                     .le_u32()
                     .map_err(ChunkError::factory(index, ChunkErrorKind::LoopEnd))?;
 
-                let sample_loop = Loop::parse(index, start, end)?;
-
-                todo!()
+                stream.stream_loop = Some(Loop::parse(index, start, end)?);
             }
             DspCoefficients => {
                 let channels = u8::from(stream.channels);
@@ -286,7 +292,7 @@ fn parse_stream_chunks<R: Read>(
                     dsp_coeffs.push(coeff);
                 }
 
-                todo!()
+                stream.dsp_coeffs = Some(dsp_coeffs.into_boxed_slice());
             }
             Atrac9Config => {
                 todo!()
@@ -389,6 +395,7 @@ impl RawStreamChunk {
     }
 }
 
+#[derive(Debug, PartialEq)]
 struct Loop {
     start: u32,
     len: NonZeroU32,
@@ -400,6 +407,28 @@ impl Loop {
             .ok_or_else(|| ChunkError::new(index, ChunkErrorKind::ZeroLengthLoop))?;
 
         Ok(Self { start, len })
+    }
+}
+
+struct StreamInfo {
+    sample_rate: NonZeroU32,
+    channels: NonZeroU8,
+    num_samples: NonZeroU32,
+    stream_loop: Option<Loop>,
+    dsp_coeffs: Option<Box<[i16]>>,
+    name: Option<Box<str>>,
+}
+
+impl From<StreamHeader> for StreamInfo {
+    fn from(value: StreamHeader) -> Self {
+        Self {
+            sample_rate: value.sample_rate,
+            channels: value.channels,
+            num_samples: value.num_samples,
+            stream_loop: value.stream_loop,
+            dsp_coeffs: value.dsp_coeffs,
+            name: None,
+        }
     }
 }
 
@@ -609,7 +638,9 @@ mod test {
                 sample_rate: NonZeroU32::new(44100).unwrap(),
                 channels: NonZeroU8::new(2).unwrap(),
                 data_offset: NonZeroU32::new(32).unwrap(),
-                num_samples: NonZeroU32::new(1).unwrap()
+                num_samples: NonZeroU32::new(1).unwrap(),
+                stream_loop: None,
+                dsp_coeffs: None,
             }
         );
     }
