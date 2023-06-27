@@ -84,7 +84,19 @@ impl Header {
         ))?;
 
         if name_table_size != 0 {
-            read_stream_names(reader, u32::from(num_streams), name_table_size, &mut stream_info)?;
+            let mut name_offsets = Vec::with_capacity(u32::from(num_streams) as usize);
+
+            for index in 0..num_streams.into() {
+                let offset = reader
+                    .le_u32()
+                    .map_err(NameError::read_factory(index, NameErrorKind::NameOffset))?;
+
+                name_offsets.push(offset);
+            }
+
+            name_offsets.push(name_table_size);
+
+            read_stream_names(reader, &name_offsets, &mut stream_info)?;
         }
 
         todo!()
@@ -440,24 +452,10 @@ impl From<StreamHeader> for StreamInfo {
 
 fn read_stream_names<R: Read>(
     reader: &mut Reader<R>,
-    num_streams: u32,
-    name_table_size: u32,
+    name_offsets: &[u32],
     stream_info: &mut [StreamInfo],
 ) -> Result<(), NameError> {
-    let mut offsets = Vec::with_capacity(num_streams as usize);
-
-    for index in 0..num_streams {
-        let name_offset = reader
-            .le_u32()
-            .map_err(NameError::read_factory(index, NameErrorKind::NameOffset))?;
-
-        offsets.push(name_offset);
-    }
-
-    offsets.push(name_table_size);
-
-    for (index_usize, name_len) in offsets
-        .into_boxed_slice()
+    for (index_usize, name_len) in name_offsets
         .windows(2)
         .map(|window| window[1] - window[0])
         .enumerate()
