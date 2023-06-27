@@ -98,7 +98,7 @@ impl Display for HeaderError {
             Metadata => f.write_str("failed to read (unused) metadata bytes"),
             StreamHeader => f.write_str("failed to parse stream header"),
             WrongHeaderSize { expected, actual } => {
-                f.write_str(&format!("expected total size of base header and stream headers ({expected} bytes) was different from actual size ({actual} bytes)"))
+                f.write_str(&format!("total size of base header and stream headers ({actual} bytes) was different from expected ({expected} bytes)"))
             }
             NameTable => f.write_str("failed to read stream names")
         }
@@ -287,7 +287,7 @@ impl Display for ChunkError {
             )),
             ZeroVorbisLayers => f.write_str("number of layers in Vorbis stream was 0"),
             WrongChunkSize { expected, actual } => {
-                f.write_str(&format!("expected stream header chunk size ({expected} bytes) was different from actual size ({actual} bytes)"))
+                f.write_str(&format!("size of stream header chunk ({actual} bytes) was different from expected ({expected} bytes)"))
             }
         }?;
 
