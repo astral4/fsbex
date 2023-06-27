@@ -15,15 +15,15 @@ pub(crate) enum HeaderErrorKind {
     Magic,
     Version,
     UnknownVersion { version: u32 },
-    TotalSubsongs,
-    ZeroSubsongs,
-    SampleHeaderSize,
+    StreamCount,
+    ZeroStreams,
+    StreamHeadersSize,
     NameTableSize,
-    SampleDataSize,
+    StreamDataSize,
     Codec,
     UnknownCodec { flag: u32 },
     Metadata,
-    Stream,
+    StreamHeader,
 }
 
 #[derive(Debug)]
@@ -81,17 +81,17 @@ impl Display for HeaderError {
             UnknownVersion { version } => {
                 f.write_str(&format!("file format version was not recognized (0x{version:08x})"))
             }
-            TotalSubsongs => f.write_str("failed to read number of subsongs"),
-            ZeroSubsongs => f.write_str("number of subsongs was 0"),
-            SampleHeaderSize => f.write_str("failed to read size of sample header"),
+            StreamCount => f.write_str("failed to read number of streams"),
+            ZeroStreams => f.write_str("number of streams was 0"),
+            StreamHeadersSize => f.write_str("failed to read size of stream headers"),
             NameTableSize => f.write_str("failed to read size of name table"),
-            SampleDataSize => f.write_str("failed to read size of sample data"),
+            StreamDataSize => f.write_str("failed to read size of stream data"),
             Codec => f.write_str("failed to read codec flag"),
             UnknownCodec { flag } => {
                 f.write_str(&format!("codec flag was not recognized (0x{flag:08x})"))
             }
             Metadata => f.write_str("failed to read (unused) metadata bytes"),
-            Stream => f.write_str("failed to parse stream header"),
+            StreamHeader => f.write_str("failed to parse stream header"),
         }
     }
 }
@@ -117,7 +117,7 @@ pub(crate) struct StreamError {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum StreamErrorKind {
-    SampleMode,
+    StreamInfo,
     UnknownSampleRate { flag: u8 },
     ZeroDataOffset,
     ZeroSamples,
@@ -159,7 +159,7 @@ impl StreamError {
 impl From<StreamError> for HeaderError {
     fn from(value: StreamError) -> Self {
         Self {
-            kind: HeaderErrorKind::Stream,
+            kind: HeaderErrorKind::StreamHeader,
             source: Some(HeaderErrorSource::Stream(value)),
         }
     }
@@ -171,16 +171,16 @@ impl Display for StreamError {
         use StreamErrorKind::*;
 
         match self.kind {
-            SampleMode => f.write_str("failed to read sample mode"),
+            StreamInfo => f.write_str("failed to read stream metadata"),
             UnknownSampleRate { flag } => {
                 f.write_str(&format!("sample rate flag was not recognized (0x{flag:02x})"))
             }
-            ZeroDataOffset => f.write_str("sample data offset was 0"),
+            ZeroDataOffset => f.write_str("stream data offset was 0"),
             ZeroSamples => f.write_str("number of samples was 0"),
             Chunk => f.write_str("failed to parse sample chunk"),
         }?;
 
-        f.write_str(&format!(" - stream at index {}", self.index))
+        f.write_str(&format!(" - stream header at index {}", self.index))
     }
 }
 
@@ -207,7 +207,7 @@ pub(crate) struct ChunkError {
 pub(crate) enum ChunkErrorKind {
     Flag,
     UnknownType { flag: u8 },
-    Channels,
+    ChannelCount,
     SampleRate,
     ZeroSampleRate,
     LoopStart,
@@ -259,7 +259,7 @@ impl Display for ChunkError {
             UnknownType { flag } => {
                 f.write_str(&format!("chunk type flag was not recognized (0x{flag:02x})"))
             }
-            Channels => f.write_str("failed to read number of channels"),
+            ChannelCount => f.write_str("failed to read number of channels"),
             SampleRate => f.write_str("failed to read sample rate"),
             ZeroSampleRate => f.write_str("sample rate was 0"),
             LoopStart => f.write_str("failed to read starting position of loop in sample"),
@@ -277,7 +277,7 @@ impl Display for ChunkError {
             }
         }?;
 
-        f.write_str(&format!(" - chunk at index {}", self.index))
+        f.write_str(&format!(" - stream header chunk at index {}", self.index))
     }
 }
 

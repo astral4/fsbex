@@ -20,23 +20,23 @@ impl Header {
             .map_err(HeaderError::factory(HeaderErrorKind::Version))?
             .try_into()?;
 
-        let total_subsongs: NonZeroU32 = reader
+        let num_streams: NonZeroU32 = reader
             .le_u32()
-            .map_err(HeaderError::factory(HeaderErrorKind::TotalSubsongs))?
+            .map_err(HeaderError::factory(HeaderErrorKind::StreamCount))?
             .try_into()
-            .map_err(|_| HeaderError::new(HeaderErrorKind::ZeroSubsongs))?;
+            .map_err(|_| HeaderError::new(HeaderErrorKind::ZeroStreams))?;
 
-        let sample_header_size = reader
+        let stream_headers_size = reader
             .le_u32()
-            .map_err(HeaderError::factory(HeaderErrorKind::SampleHeaderSize))?;
+            .map_err(HeaderError::factory(HeaderErrorKind::StreamHeadersSize))?;
 
         let name_table_size = reader
             .le_u32()
             .map_err(HeaderError::factory(HeaderErrorKind::NameTableSize))?;
 
-        let sample_data_size = reader
+        let stream_data_size = reader
             .le_u32()
-            .map_err(HeaderError::factory(HeaderErrorKind::SampleDataSize))?;
+            .map_err(HeaderError::factory(HeaderErrorKind::StreamDataSize))?;
 
         let codec: Codec = reader
             .le_u32()
@@ -52,14 +52,15 @@ impl Header {
             .advance_to(base_header_size)
             .map_err(HeaderError::factory(HeaderErrorKind::Metadata))?;
 
-        for index in 0..total_subsongs.into() {
-            let mut mode = match reader.le_u64() {
-                Ok(n) => RawSampleMode::from(n).parse(index),
-                Err(e) => Err(StreamError::new_with_source(index, StreamErrorKind::SampleMode, e)),
+        for index in 0..num_streams.into() {
+            let mut stream_info = match reader.le_u64() {
+                Ok(n) => RawStreamInfo::from(n).parse(index),
+                Err(e) => Err(StreamError::new_with_source(index, StreamErrorKind::StreamInfo, e)),
             }?;
 
-            if mode.has_chunks {
-                parse_sample_chunks(reader, &mut mode).map_err(|e| e.into_stream_err(index))?;
+            if stream_info.has_chunks {
+                parse_sample_chunks(reader, &mut stream_info)
+                    .map_err(|e| e.into_stream_err(index))?;
             }
         }
 
@@ -135,7 +136,7 @@ impl TryFrom<u32> for Codec {
 
 #[bitsize(64)]
 #[derive(FromBits)]
-struct RawSampleMode {
+struct RawStreamInfo {
     has_chunks: bool,
     sample_rate: u4,
     channels: u2,
@@ -144,7 +145,7 @@ struct RawSampleMode {
 }
 
 #[derive(Debug, PartialEq)]
-struct SampleMode {
+struct StreamInfo {
     has_chunks: bool,
     sample_rate: NonZeroU32,
     channels: u8,
@@ -152,8 +153,8 @@ struct SampleMode {
     num_samples: NonZeroU32,
 }
 
-impl RawSampleMode {
-    fn parse(self, stream_index: u32) -> Result<SampleMode, StreamError> {
+impl RawStreamInfo {
+    fn parse(self, stream_index: u32) -> Result<StreamInfo, StreamError> {
         let sample_rate = match self.sample_rate().value() {
             0 => Ok(4000),
             1 => Ok(8000),
@@ -195,7 +196,7 @@ impl RawSampleMode {
             .try_into()
             .map_err(|_| StreamError::new(stream_index, StreamErrorKind::ZeroSamples))?;
 
-        Ok(SampleMode {
+        Ok(StreamInfo {
             has_chunks: self.has_chunks(),
             sample_rate,
             channels,
@@ -207,7 +208,7 @@ impl RawSampleMode {
 
 fn parse_sample_chunks<R: Read>(
     reader: &mut Reader<R>,
-    sample: &mut SampleMode,
+    stream: &mut StreamInfo,
 ) -> Result<(), ChunkError> {
     use crate::header::Loop;
     #[allow(clippy::enum_glob_use)]
@@ -223,12 +224,12 @@ fn parse_sample_chunks<R: Read>(
 
         match chunk.kind {
             Channels => {
-                sample.channels = reader
+                stream.channels = reader
                     .u8()
-                    .map_err(ChunkError::factory(index, ChunkErrorKind::Channels))?;
+                    .map_err(ChunkError::factory(index, ChunkErrorKind::ChannelCount))?;
             }
             SampleRate => {
-                sample.sample_rate = reader
+                stream.sample_rate = reader
                     .le_u32()
                     .map_err(ChunkError::factory(index, ChunkErrorKind::SampleRate))?
                     .try_into()
@@ -248,9 +249,9 @@ fn parse_sample_chunks<R: Read>(
                 todo!()
             }
             DspCoefficients => {
-                let mut dsp_coeffs = Vec::with_capacity(sample.channels as usize);
+                let mut dsp_coeffs = Vec::with_capacity(stream.channels as usize);
 
-                for _ in 0..sample.channels {
+                for _ in 0..stream.channels {
                     let mut coeff = 0;
 
                     for _ in 0..16 {
@@ -286,7 +287,7 @@ fn parse_sample_chunks<R: Read>(
                     ChunkError::new(index, ChunkErrorKind::TooManyVorbisLayers { layers })
                 })?;
 
-                sample.channels *= layers;
+                stream.channels *= layers;
             }
             _ => {}
         }
@@ -383,7 +384,7 @@ impl Loop {
 
 #[cfg(test)]
 mod test {
-    use super::{Header, RawSampleChunk, RawSampleMode, SampleMode, FSB5_MAGIC};
+    use super::{Header, RawSampleChunk, RawStreamInfo, StreamInfo, FSB5_MAGIC};
     #[allow(clippy::enum_glob_use)]
     use crate::error::{ChunkErrorKind::*, HeaderErrorKind::*, StreamErrorKind::*};
     use crate::read::Reader;
@@ -419,33 +420,33 @@ mod test {
 
         let data = b"FSB5\x00\x00\x00\x00";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == TotalSubsongs));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == StreamCount));
     }
 
     #[test]
-    fn read_total_subsongs() {
+    fn read_stream_count() {
         let mut reader;
 
         let data = b"FSB5\x01\x00\x00\x00\x00";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == TotalSubsongs));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == StreamCount));
 
         let data = b"FSB5\x01\x00\x00\x00\x00\x00\x00\x00";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == ZeroSubsongs));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == StreamCount));
 
         let data = b"FSB5\x01\x00\x00\x00\x00\x00\xFF\xFF";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == SampleHeaderSize));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == StreamHeadersSize));
     }
 
     #[test]
-    fn read_sample_header_size() {
+    fn read_stream_headers_size() {
         let mut reader;
 
         let data = b"FSB5\x01\x00\x00\x000000\x00";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == SampleHeaderSize));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == StreamHeadersSize));
 
         let data = b"FSB5\x01\x00\x00\x0000000000";
         reader = Reader::new(data.as_slice());
@@ -462,16 +463,16 @@ mod test {
 
         let data = b"FSB5\x01\x00\x00\x00000000000000";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == SampleDataSize));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == StreamDataSize));
     }
 
     #[test]
-    fn read_sample_data_size() {
+    fn read_stream_data_size() {
         let mut reader;
 
         let data = b"FSB5\x01\x00\x00\x00000000000000\x00";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == SampleDataSize));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == StreamDataSize));
 
         let data = b"FSB5\x01\x00\x00\x000000000000000000";
         reader = Reader::new(data.as_slice());
@@ -520,7 +521,7 @@ mod test {
             buf
         };
         reader = Reader::new(&ok_v0_data);
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.is_stream_err_kind(SampleMode)));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.is_stream_err_kind(StreamInfo)));
 
         let ok_v1_data = {
             let mut buf = Vec::from(V1_HEADER_BASE);
@@ -528,22 +529,22 @@ mod test {
             buf
         };
         reader = Reader::new(&ok_v1_data);
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.is_stream_err_kind(SampleMode)));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.is_stream_err_kind(StreamInfo)));
     }
 
     #[test]
-    fn read_stream_mode() {
+    fn read_stream_info() {
         let data = b"FSB5\x01\x00\x00\x00\x01\x00\x00\x00000000000000\x01\x00\x00\x000000000000000000000000000000000000000000";
         let mut reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.is_stream_err_kind(SampleMode)));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.is_stream_err_kind(StreamInfo)));
     }
 
     #[test]
-    fn derived_sample_mode_parsing_works() {
+    fn derived_stream_info_parsing_works() {
         #[allow(clippy::unusual_byte_groupings)]
         let data = 0b011010000101100111100000001011_111001101101001101000100110_11_1110_0;
 
-        let mode = RawSampleMode::from(data);
+        let mode = RawStreamInfo::from(data);
 
         let has_chunks = (data & 0x01) == 1;
         assert_eq!(mode.has_chunks(), has_chunks);
@@ -565,24 +566,24 @@ mod test {
     #[allow(clippy::unusual_byte_groupings)]
     fn parse_sample_mode() {
         let data = 0b011010000101100111100000001011_111001101101001101000100110_11_1110_0;
-        let mode = RawSampleMode::from(data);
+        let mode = RawStreamInfo::from(data);
         assert!(mode
             .parse(0)
             .is_err_and(|e| e.kind() == UnknownSampleRate { flag: 0b1110 }));
 
         let data = 0b011010000101100111100000001011_000000000000000000000000000_11_0000_0;
-        let mode = RawSampleMode::from(data);
+        let mode = RawStreamInfo::from(data);
         assert!(mode.parse(0).is_err_and(|e| e.kind() == ZeroDataOffset));
 
         let data = 0b000000000000000000000000000000_111001101101001101000100110_11_0000_0;
-        let mode = RawSampleMode::from(data);
+        let mode = RawStreamInfo::from(data);
         assert!(mode.parse(0).is_err_and(|e| e.kind() == ZeroSamples));
 
         let data = 0b000000000000000000000000000001_000000000000000000000000001_01_1000_0;
-        let mode = RawSampleMode::from(data).parse(0).unwrap();
+        let mode = RawStreamInfo::from(data).parse(0).unwrap();
         assert_eq!(
             mode,
-            SampleMode {
+            StreamInfo {
                 has_chunks: false,
                 sample_rate: NonZeroU32::new(44100).unwrap(),
                 channels: 2,
