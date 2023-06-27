@@ -1,9 +1,11 @@
 use crate::error::{
-    ChunkError, ChunkErrorKind, HeaderError, HeaderErrorKind, StreamError, StreamErrorKind,
+    ChunkError, ChunkErrorKind, HeaderError, HeaderErrorKind, NameError, NameErrorKind,
+    StreamError, StreamErrorKind,
 };
 use crate::read::Reader;
 use bilge::prelude::*;
 use std::{
+    ffi::CStr,
     io::Read,
     num::{NonZeroU32, NonZeroU8},
     ops::Mul,
@@ -80,6 +82,10 @@ impl Header {
                 actual: reader.position(),
             },
         ))?;
+
+        if name_table_size != 0 {
+            read_stream_names(reader, u32::from(num_streams), name_table_size, &mut stream_info)?;
+        }
 
         todo!()
     }
@@ -432,6 +438,47 @@ impl From<StreamHeader> for StreamInfo {
     }
 }
 
+fn read_stream_names<R: Read>(
+    reader: &mut Reader<R>,
+    num_streams: u32,
+    name_table_size: u32,
+    stream_info: &mut [StreamInfo],
+) -> Result<(), NameError> {
+    let mut offsets = Vec::with_capacity(num_streams as usize);
+
+    for index in 0..num_streams {
+        let name_offset = reader
+            .le_u32()
+            .map_err(NameError::read_factory(index, NameErrorKind::NameOffset))?;
+
+        offsets.push(name_offset);
+    }
+
+    offsets.push(name_table_size);
+
+    for (index_usize, name_len) in offsets
+        .into_boxed_slice()
+        .windows(2)
+        .map(|window| window[1] - window[0])
+        .enumerate()
+    {
+        let index = index_usize.try_into().unwrap();
+
+        let name_bytes = reader
+            .take_len(name_len as usize)
+            .map_err(NameError::read_factory(index, NameErrorKind::Name))?;
+
+        let raw_name = CStr::from_bytes_with_nul(name_bytes.as_slice())
+            .map_err(NameError::cstr_factory(index))?;
+
+        let name = raw_name.to_str().map_err(NameError::utf8_factory(index))?.into();
+
+        stream_info[index_usize].name = Some(name);
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod test {
     use super::{Header, RawStreamChunk, RawStreamHeader, StreamHeader, FSB5_MAGIC};
@@ -692,14 +739,5 @@ mod test {
         for flag in 16..128 {
             test_invalid_flag(flag);
         }
-    }
-
-    #[test]
-    fn it_works() {
-        let data = include_bytes!("../test-data/act11d0d0/m_bat_mudrock_loop.fsb5");
-
-        let mut reader = Reader::new(data.as_slice());
-
-        let _ = Header::parse(&mut reader).unwrap();
     }
 }

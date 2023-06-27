@@ -1,7 +1,9 @@
 use crate::read::ReadError;
 use std::{
     error::Error,
+    ffi::FromBytesWithNulError,
     fmt::{Display, Formatter, Result as FmtResult},
+    str::Utf8Error,
 };
 
 #[derive(Debug)]
@@ -25,12 +27,14 @@ pub(crate) enum HeaderErrorKind {
     Metadata,
     StreamHeader,
     WrongHeaderSize { expected: usize, actual: usize },
+    NameTable,
 }
 
 #[derive(Debug)]
 pub(crate) enum HeaderErrorSource {
     Read(ReadError),
     Stream(StreamError),
+    NameTable(NameError),
 }
 
 impl HeaderError {
@@ -94,8 +98,9 @@ impl Display for HeaderError {
             Metadata => f.write_str("failed to read (unused) metadata bytes"),
             StreamHeader => f.write_str("failed to parse stream header"),
             WrongHeaderSize { expected, actual } => {
-                f.write_str(&format!("expected header size ({expected} bytes) was smaller than actual size ({actual} bytes)"))
+                f.write_str(&format!("expected total size of base header and stream headers ({expected} bytes) was different from actual size ({actual} bytes)"))
             }
+            NameTable => f.write_str("failed to read stream names")
         }
     }
 }
@@ -106,6 +111,7 @@ impl Error for HeaderError {
             Some(source) => match source {
                 HeaderErrorSource::Read(e) => Some(e),
                 HeaderErrorSource::Stream(e) => Some(e),
+                HeaderErrorSource::NameTable(e) => Some(e),
             },
             None => None,
         }
@@ -281,7 +287,7 @@ impl Display for ChunkError {
             )),
             ZeroVorbisLayers => f.write_str("number of layers in Vorbis stream was 0"),
             WrongChunkSize { expected, actual } => {
-                f.write_str(&format!("expected stream header chunk size ({expected} bytes) was smaller than actual size ({actual} bytes)"))
+                f.write_str(&format!("expected stream header chunk size ({expected} bytes) was different from actual size ({actual} bytes)"))
             }
         }?;
 
@@ -294,6 +300,83 @@ impl Error for ChunkError {
         match &self.source {
             Some(source) => Some(source),
             None => None,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct NameError {
+    index: u32,
+    kind: NameErrorKind,
+    source: NameErrorSource,
+}
+
+#[derive(Debug)]
+pub(crate) enum NameErrorKind {
+    NameOffset,
+    Name,
+    Utf8,
+}
+
+#[derive(Debug)]
+enum NameErrorSource {
+    Read(ReadError),
+    CStr(FromBytesWithNulError),
+    Utf8(Utf8Error),
+}
+
+impl NameError {
+    fn new(index: u32, kind: NameErrorKind, source: NameErrorSource) -> Self {
+        Self {
+            index,
+            kind,
+            source,
+        }
+    }
+
+    pub(crate) fn read_factory(index: u32, kind: NameErrorKind) -> impl FnOnce(ReadError) -> Self {
+        move |source| Self::new(index, kind, NameErrorSource::Read(source))
+    }
+
+    pub(crate) fn cstr_factory(index: u32) -> impl FnOnce(FromBytesWithNulError) -> Self {
+        move |source| Self::new(index, NameErrorKind::Name, NameErrorSource::CStr(source))
+    }
+
+    pub(crate) fn utf8_factory(index: u32) -> impl FnOnce(Utf8Error) -> Self {
+        move |source| Self::new(index, NameErrorKind::Utf8, NameErrorSource::Utf8(source))
+    }
+}
+
+impl From<NameError> for HeaderError {
+    fn from(value: NameError) -> Self {
+        Self {
+            kind: HeaderErrorKind::NameTable,
+            source: Some(HeaderErrorSource::NameTable(value)),
+        }
+    }
+}
+
+impl Display for NameError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        #[allow(clippy::enum_glob_use)]
+        use NameErrorKind::*;
+
+        match self.kind {
+            NameOffset => f.write_str("failed to read offset of stream name"),
+            Name => f.write_str("failed to read stream name"),
+            Utf8 => f.write_str("stream name was not valid UTF-8"),
+        }?;
+
+        f.write_str(&format!(" - stream name at index {}", self.index))
+    }
+}
+
+impl Error for NameError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match &self.source {
+            NameErrorSource::Read(e) => Some(e),
+            NameErrorSource::CStr(e) => Some(e),
+            NameErrorSource::Utf8(e) => Some(e),
         }
     }
 }
