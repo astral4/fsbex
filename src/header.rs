@@ -468,13 +468,7 @@ fn read_stream_names<R: Read>(
     name_offsets: &[u32],
     stream_info: &mut [StreamInfo],
 ) -> Result<(), NameError> {
-    for (index_usize, name_len) in name_offsets
-        .windows(2)
-        .map(|window| window[1] - window[0])
-        .enumerate()
-    {
-        let index = index_usize.try_into().unwrap();
-
+    for (name_len, index) in name_offsets.windows(2).map(|window| window[1] - window[0]).zip(0..) {
         let name_bytes = reader
             .take_len(name_len as usize)
             .map_err(NameError::read_factory(index, NameErrorKind::Name))?;
@@ -484,7 +478,7 @@ fn read_stream_names<R: Read>(
 
         let name = raw_name.to_str().map_err(NameError::utf8_factory(index))?.into();
 
-        stream_info[index_usize].name = Some(name);
+        stream_info[index as usize].name = Some(name);
     }
 
     Ok(())
