@@ -11,7 +11,12 @@ use std::{
     ops::Mul,
 };
 
-struct Header {}
+#[derive(Debug)]
+struct Header {
+    num_streams: NonZeroU32,
+    codec: Codec,
+    stream_info: Box<[StreamInfo]>,
+}
 
 impl Header {
     fn parse<R: Read>(reader: &mut Reader<R>) -> Result<Self, HeaderError> {
@@ -44,7 +49,7 @@ impl Header {
             .le_u32()
             .map_err(HeaderError::factory(HeaderErrorKind::StreamDataSize))?;
 
-        let codec: Codec = reader
+        let codec = reader
             .le_u32()
             .map_err(HeaderError::factory(HeaderErrorKind::Codec))?
             .try_into()?;
@@ -58,7 +63,9 @@ impl Header {
             .advance_to(base_header_size)
             .map_err(HeaderError::factory(HeaderErrorKind::Metadata))?;
 
-        let mut stream_info: Vec<StreamInfo> = Vec::with_capacity(u32::from(num_streams) as usize);
+        let num_streams_usize = u32::from(num_streams) as usize;
+
+        let mut stream_info = Vec::with_capacity(num_streams_usize);
 
         for index in 0..num_streams.into() {
             let mut stream_header = match reader.le_u64() {
@@ -84,7 +91,7 @@ impl Header {
         ))?;
 
         if name_table_size != 0 {
-            let mut name_offsets = Vec::with_capacity(u32::from(num_streams) as usize);
+            let mut name_offsets = Vec::with_capacity(num_streams_usize);
 
             for index in 0..num_streams.into() {
                 let offset = reader
@@ -99,7 +106,11 @@ impl Header {
             read_stream_names(reader, &name_offsets, &mut stream_info)?;
         }
 
-        todo!()
+        Ok(Self {
+            num_streams,
+            codec,
+            stream_info: stream_info.into_boxed_slice(),
+        })
     }
 }
 
@@ -122,6 +133,7 @@ impl TryFrom<u32> for Version {
     }
 }
 
+#[derive(Debug)]
 enum Codec {
     Pcm8,
     Pcm16,
@@ -428,6 +440,7 @@ impl Loop {
     }
 }
 
+#[derive(Debug)]
 struct StreamInfo {
     sample_rate: NonZeroU32,
     channels: NonZeroU8,
