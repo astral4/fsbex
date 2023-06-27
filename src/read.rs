@@ -41,22 +41,23 @@ impl<R: Read> Reader<R> {
         }
     }
 
-    fn read_to_slice(&mut self, buf: &mut [u8], expected: usize) -> ReadResult<()> {
+    fn read_to_slice(&mut self, buf: &mut [u8]) -> ReadResult<()> {
         match self.inner.read(buf) {
             Ok(n) => {
                 self.position += n;
+                let buf_len = buf.len();
 
-                if n == expected {
+                if n == buf_len {
                     Ok(())
                 } else {
                     Err(self.to_error(ReadErrorKind::Incomplete(Needed::Size(
-                        NonZeroUsize::new(expected - n)
-                            .expect("n is guaranteed to not equal expected"),
+                        NonZeroUsize::new(buf_len - n)
+                            .expect("n is guaranteed to not equal buf_len"),
                     ))))
                 }
             }
             Err(e) => match e.kind() {
-                ErrorKind::Interrupted => self.read_to_slice(buf, expected),
+                ErrorKind::Interrupted => self.read_to_slice(buf),
                 ErrorKind::UnexpectedEof => {
                     Err(self.to_error(ReadErrorKind::Incomplete(Needed::Unknown)))
                 }
@@ -76,14 +77,14 @@ impl<R: Read> Reader<R> {
     }
 
     pub(crate) fn take_len(&mut self, len: usize) -> ReadResult<Vec<u8>> {
-        let mut buf = Vec::with_capacity(len);
-        Self::read_to_slice(self, &mut buf, len)?;
+        let mut buf = vec![0; len];
+        Self::read_to_slice(self, &mut buf)?;
         Ok(buf)
     }
 
     pub(crate) fn skip(&mut self, amount: usize) -> ReadResult<()> {
-        let mut buf = Vec::with_capacity(amount);
-        Self::read_to_slice(self, buf.as_mut_slice(), amount)
+        let mut buf = vec![0; amount];
+        Self::read_to_slice(self, buf.as_mut_slice())
     }
 
     pub(crate) fn advance_to(&mut self, position: usize) -> ReadResult<()> {
