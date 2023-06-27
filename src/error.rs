@@ -24,6 +24,7 @@ pub(crate) enum HeaderErrorKind {
     UnknownCodec { flag: u32 },
     Metadata,
     StreamHeader,
+    WrongHeaderSize { expected: usize, actual: usize },
 }
 
 #[derive(Debug)]
@@ -92,6 +93,9 @@ impl Display for HeaderError {
             }
             Metadata => f.write_str("failed to read (unused) metadata bytes"),
             StreamHeader => f.write_str("failed to parse stream header"),
+            WrongHeaderSize { expected, actual } => {
+                f.write_str(&format!("expected header size ({expected} bytes) was smaller than actual size ({actual} bytes)"))
+            }
         }
     }
 }

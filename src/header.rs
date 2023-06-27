@@ -68,6 +68,15 @@ impl Header {
             }
         }
 
+        let header_size = base_header_size + stream_headers_size as usize;
+
+        reader.advance_to(header_size).map_err(HeaderError::factory(
+            HeaderErrorKind::WrongHeaderSize {
+                expected: header_size,
+                actual: reader.position(),
+            },
+        ))?;
+
         todo!()
     }
 }
@@ -297,12 +306,9 @@ fn parse_sample_chunks<R: Read>(
                     ChunkError::new(index, ChunkErrorKind::TooManyVorbisLayers { layers })
                 })?;
 
-                let layers: NonZeroU8 = layers
+                stream.channels = (u8::from(stream.channels) * layers)
                     .try_into()
                     .map_err(|_| ChunkError::new(index, ChunkErrorKind::ZeroVorbisLayers))?;
-
-                stream.channels =
-                    (u8::from(stream.channels) * u8::from(layers)).try_into().unwrap();
             }
             _ => {}
         }
@@ -448,7 +454,7 @@ mod test {
 
         let data = b"FSB5\x01\x00\x00\x00\x00\x00\x00\x00";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == StreamCount));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == ZeroStreams));
 
         let data = b"FSB5\x01\x00\x00\x00\x00\x00\xFF\xFF";
         reader = Reader::new(data.as_slice());
