@@ -3,7 +3,11 @@ use crate::error::{
 };
 use crate::read::Reader;
 use bilge::prelude::*;
-use std::{io::Read, num::NonZeroU32, ops::Mul};
+use std::{
+    io::Read,
+    num::{NonZeroU32, NonZeroU8},
+    ops::Mul,
+};
 
 struct Header {}
 
@@ -148,7 +152,7 @@ struct RawStreamInfo {
 struct StreamInfo {
     has_chunks: bool,
     sample_rate: NonZeroU32,
-    channels: u8,
+    channels: NonZeroU8,
     data_offset: NonZeroU32,
     num_samples: NonZeroU32,
 }
@@ -181,7 +185,9 @@ impl RawStreamInfo {
             2 => 6,
             3 => 8,
             _ => unreachable!(),
-        };
+        }
+        .try_into()
+        .unwrap();
 
         let data_offset = self
             .data_offset()
@@ -226,7 +232,9 @@ fn parse_sample_chunks<R: Read>(
             Channels => {
                 stream.channels = reader
                     .u8()
-                    .map_err(ChunkError::factory(index, ChunkErrorKind::ChannelCount))?;
+                    .map_err(ChunkError::factory(index, ChunkErrorKind::ChannelCount))?
+                    .try_into()
+                    .map_err(|_| ChunkError::new(index, ChunkErrorKind::ZeroChannels))?;
             }
             SampleRate => {
                 stream.sample_rate = reader
@@ -249,9 +257,11 @@ fn parse_sample_chunks<R: Read>(
                 todo!()
             }
             DspCoefficients => {
-                let mut dsp_coeffs = Vec::with_capacity(stream.channels as usize);
+                let channels = u8::from(stream.channels);
 
-                for _ in 0..stream.channels {
+                let mut dsp_coeffs = Vec::with_capacity(channels as usize);
+
+                for _ in 0..channels {
                     let mut coeff = 0;
 
                     for _ in 0..16 {
@@ -281,13 +291,18 @@ fn parse_sample_chunks<R: Read>(
             VorbisIntraLayers => {
                 let layers = reader
                     .le_u32()
-                    .map_err(ChunkError::factory(index, ChunkErrorKind::VorbisLayers))?;
+                    .map_err(ChunkError::factory(index, ChunkErrorKind::VorbisLayerCount))?;
 
                 let layers: u8 = layers.try_into().map_err(|_| {
                     ChunkError::new(index, ChunkErrorKind::TooManyVorbisLayers { layers })
                 })?;
 
-                stream.channels *= layers;
+                let layers: NonZeroU8 = layers
+                    .try_into()
+                    .map_err(|_| ChunkError::new(index, ChunkErrorKind::ZeroVorbisLayers))?;
+
+                stream.channels =
+                    (u8::from(stream.channels) * u8::from(layers)).try_into().unwrap();
             }
             _ => {}
         }
@@ -388,7 +403,7 @@ mod test {
     #[allow(clippy::enum_glob_use)]
     use crate::error::{ChunkErrorKind::*, HeaderErrorKind::*, StreamErrorKind::*};
     use crate::read::Reader;
-    use std::num::NonZeroU32;
+    use std::num::{NonZeroU32, NonZeroU8};
 
     #[test]
     fn read_magic() {
@@ -564,7 +579,7 @@ mod test {
 
     #[test]
     #[allow(clippy::unusual_byte_groupings)]
-    fn parse_sample_mode() {
+    fn parse_stream_info() {
         let data = 0b011010000101100111100000001011_111001101101001101000100110_11_1110_0;
         let mode = RawStreamInfo::from(data);
         assert!(mode
@@ -586,7 +601,7 @@ mod test {
             StreamInfo {
                 has_chunks: false,
                 sample_rate: NonZeroU32::new(44100).unwrap(),
-                channels: 2,
+                channels: NonZeroU8::new(2).unwrap(),
                 data_offset: NonZeroU32::new(32).unwrap(),
                 num_samples: NonZeroU32::new(1).unwrap()
             }
@@ -594,7 +609,7 @@ mod test {
     }
 
     #[test]
-    fn derived_sample_chunk_parsing_works() {
+    fn derived_stream_chunk_parsing_works() {
         #[allow(clippy::unusual_byte_groupings)]
         let data = 0b0001101_100001101110000000011001_0;
 
@@ -611,7 +626,7 @@ mod test {
     }
 
     #[test]
-    fn parse_sample_chunk() {
+    fn parse_stream_chunk() {
         const DATA: &[u8; 72] = b"FSB5\x01\x00\x00\x00\x01\x00\x00\x00000000000000\x01\x00\x00\x00000000000000000000000000000000000000\x010000000";
 
         let mut reader;

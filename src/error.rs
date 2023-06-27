@@ -177,7 +177,7 @@ impl Display for StreamError {
             }
             ZeroDataOffset => f.write_str("stream data offset was 0"),
             ZeroSamples => f.write_str("number of samples was 0"),
-            Chunk => f.write_str("failed to parse sample chunk"),
+            Chunk => f.write_str("failed to parse stream header chunk"),
         }?;
 
         f.write_str(&format!(" - stream header at index {}", self.index))
@@ -208,14 +208,16 @@ pub(crate) enum ChunkErrorKind {
     Flag,
     UnknownType { flag: u8 },
     ChannelCount,
+    ZeroChannels,
     SampleRate,
     ZeroSampleRate,
     LoopStart,
     LoopEnd,
     ZeroLengthLoop,
     DspCoefficients,
-    VorbisLayers,
+    VorbisLayerCount,
     TooManyVorbisLayers { layers: u32 },
+    ZeroVorbisLayers,
     WrongChunkSize { expected: u32, actual: usize },
 }
 
@@ -260,20 +262,22 @@ impl Display for ChunkError {
                 f.write_str(&format!("chunk type flag was not recognized (0x{flag:02x})"))
             }
             ChannelCount => f.write_str("failed to read number of channels"),
+            ZeroChannels => f.write_str("number of channels was 0"),
             SampleRate => f.write_str("failed to read sample rate"),
             ZeroSampleRate => f.write_str("sample rate was 0"),
-            LoopStart => f.write_str("failed to read starting position of loop in sample"),
-            LoopEnd => f.write_str("failed to read ending position of loop in sample"),
-            ZeroLengthLoop => f.write_str("length of loop in sample was 0"),
-            DspCoefficients => f.write_str("failed to read sample DSP coefficients"),
-            VorbisLayers => {
-                f.write_str("failed to read number of layers per channel in Vorbis sample")
+            LoopStart => f.write_str("failed to read starting position of loop in stream"),
+            LoopEnd => f.write_str("failed to read ending position of loop in stream"),
+            ZeroLengthLoop => f.write_str("length of loop in stream was 0"),
+            DspCoefficients => f.write_str("failed to read DSP coefficients of stream"),
+            VorbisLayerCount => {
+                f.write_str("failed to read number of layers per channel in Vorbis stream")
             }
             TooManyVorbisLayers { layers } => f.write_str(&format!(
-                "number of layers in Vorbis sample was greater than 255 ({layers} layers)"
+                "number of layers in Vorbis stream was greater than 255 ({layers} layers)"
             )),
+            ZeroVorbisLayers => f.write_str("number of layers in Vorbis stream was 0"),
             WrongChunkSize { expected, actual } => {
-                f.write_str(&format!("expected sample chunk size ({expected} bytes) was smaller than actual size ({actual} bytes)"))
+                f.write_str(&format!("expected stream header chunk size ({expected} bytes) was smaller than actual size ({actual} bytes)"))
             }
         }?;
 
