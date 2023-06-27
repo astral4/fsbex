@@ -227,11 +227,11 @@ fn parse_sample_chunks<R: Read>(
 ) -> Result<(), ChunkError> {
     use crate::header::Loop;
     #[allow(clippy::enum_glob_use)]
-    use SampleChunkKind::*;
+    use StreamChunkKind::*;
 
     for index in 0.. {
         let chunk = match reader.le_u32() {
-            Ok(n) => RawSampleChunk::from(n).parse(index),
+            Ok(n) => RawStreamChunk::from(n).parse(index),
             Err(e) => Err(ChunkError::new_with_source(index, ChunkErrorKind::Flag, e)),
         }?;
 
@@ -333,19 +333,19 @@ fn parse_sample_chunks<R: Read>(
 
 #[bitsize(32)]
 #[derive(FromBits)]
-struct RawSampleChunk {
+struct RawStreamChunk {
     more_chunks: bool,
     size: u24,
     kind: u7,
 }
 
-struct SampleChunk {
+struct StreamChunk {
     more_chunks: bool,
     size: u32,
-    kind: SampleChunkKind,
+    kind: StreamChunkKind,
 }
 
-enum SampleChunkKind {
+enum StreamChunkKind {
     Channels,
     SampleRate,
     Loop,
@@ -360,10 +360,10 @@ enum SampleChunkKind {
     OpusDataSize,
 }
 
-impl RawSampleChunk {
-    fn parse(self, chunk_index: u32) -> Result<SampleChunk, ChunkError> {
+impl RawStreamChunk {
+    fn parse(self, chunk_index: u32) -> Result<StreamChunk, ChunkError> {
         #[allow(clippy::enum_glob_use)]
-        use SampleChunkKind::*;
+        use StreamChunkKind::*;
 
         let kind = match self.kind().value() {
             1 => Ok(Channels),
@@ -381,7 +381,7 @@ impl RawSampleChunk {
             flag => Err(ChunkError::new(chunk_index, ChunkErrorKind::UnknownType { flag })),
         }?;
 
-        Ok(SampleChunk {
+        Ok(StreamChunk {
             more_chunks: self.more_chunks(),
             size: self.size().value(),
             kind,
@@ -405,7 +405,7 @@ impl Loop {
 
 #[cfg(test)]
 mod test {
-    use super::{Header, RawSampleChunk, RawStreamInfo, StreamInfo, FSB5_MAGIC};
+    use super::{Header, RawStreamChunk, RawStreamInfo, StreamInfo, FSB5_MAGIC};
     #[allow(clippy::enum_glob_use)]
     use crate::error::{ChunkErrorKind::*, HeaderErrorKind::*, StreamErrorKind::*};
     use crate::read::Reader;
@@ -619,7 +619,7 @@ mod test {
         #[allow(clippy::unusual_byte_groupings)]
         let data = 0b0001101_100001101110000000011001_0;
 
-        let flags = RawSampleChunk::from(data);
+        let flags = RawStreamChunk::from(data);
 
         let more_chunks = (data & 0x01) == 1;
         assert_eq!(flags.more_chunks(), more_chunks);
@@ -643,7 +643,7 @@ mod test {
         #[allow(clippy::items_after_statements)]
         fn test_invalid_flag(kind: u8) {
             let flag = u32::from(kind).swap_bytes() << 1;
-            assert!(RawSampleChunk::from(flag).parse(0).is_err());
+            assert!(RawStreamChunk::from(flag).parse(0).is_err());
 
             let full = {
                 let mut buf = Vec::from(*DATA);
