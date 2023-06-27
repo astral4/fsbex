@@ -41,23 +41,22 @@ impl<R: Read> Reader<R> {
         }
     }
 
-    fn read_to_slice(&mut self, buf: &mut [u8]) -> ReadResult<()> {
+    fn read_to_slice(&mut self, buf: &mut [u8], expected: usize) -> ReadResult<()> {
         match self.inner.read(buf) {
             Ok(n) => {
                 self.position += n;
-                let buf_len = buf.len();
 
-                if n == buf_len {
+                if n == expected {
                     Ok(())
                 } else {
                     Err(self.to_error(ReadErrorKind::Incomplete(Needed::Size(
-                        NonZeroUsize::new(buf_len - n)
-                            .expect("n is guaranteed to not equal buf_len"),
+                        NonZeroUsize::new(expected - n)
+                            .expect("n is guaranteed to not equal expected"),
                     ))))
                 }
             }
             Err(e) => match e.kind() {
-                ErrorKind::Interrupted => self.read_to_slice(buf),
+                ErrorKind::Interrupted => self.read_to_slice(buf, expected),
                 ErrorKind::UnexpectedEof => {
                     Err(self.to_error(ReadErrorKind::Incomplete(Needed::Unknown)))
                 }
@@ -76,9 +75,15 @@ impl<R: Read> Reader<R> {
         Ok(buf)
     }
 
+    pub(crate) fn take_len(&mut self, len: usize) -> ReadResult<Vec<u8>> {
+        let mut buf = Vec::with_capacity(len);
+        Self::read_to_slice(self, &mut buf, len)?;
+        Ok(buf)
+    }
+
     pub(crate) fn skip(&mut self, amount: usize) -> ReadResult<()> {
-        let mut buf = vec![0u8; amount];
-        Self::read_to_slice(self, buf.as_mut_slice())
+        let mut buf = Vec::with_capacity(amount);
+        Self::read_to_slice(self, buf.as_mut_slice(), amount)
     }
 
     pub(crate) fn advance_to(&mut self, position: usize) -> ReadResult<()> {
@@ -101,12 +106,6 @@ impl<R: Read> Reader<R> {
         let mut buf = [0; 8];
         Self::read_to_array(self, &mut buf)?;
         Ok(u64::from_le_bytes(buf))
-    }
-
-    pub(crate) fn le_i32(&mut self) -> ReadResult<i32> {
-        let mut buf = [0; 4];
-        Self::read_to_array(self, &mut buf)?;
-        Ok(i32::from_le_bytes(buf))
     }
 
     pub(crate) fn be_i16(&mut self) -> ReadResult<i16> {
@@ -266,12 +265,12 @@ mod test {
 
     #[test]
     fn parse_multiple_number_types() {
-        let data = b"\x11\x00\x00\x00\x00\x00\x00\xFF\xFF\x22";
+        let data = b"\x11\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x22";
         let mut reader = Reader::new(data.as_slice());
 
         assert_eq!(reader.le_u32().unwrap(), 17);
         assert_eq!(reader.u8().unwrap(), 0);
-        assert_eq!(reader.le_i32().unwrap(), -65536);
+        assert_eq!(reader.le_u64().unwrap(), 1);
         assert_eq!(reader.u8().unwrap(), 34);
     }
 
