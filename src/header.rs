@@ -4,6 +4,7 @@ use crate::error::{
 };
 use crate::read::Reader;
 use bilge::prelude::*;
+use std::iter::zip;
 use std::{
     ffi::CStr,
     io::Read,
@@ -14,7 +15,6 @@ use std::{
 #[derive(Debug)]
 struct Header {
     num_streams: NonZeroU32,
-    stream_data_size: NonZeroU32,
     codec: Codec,
     stream_info: Box<[StreamInfo]>,
 }
@@ -46,11 +46,11 @@ impl Header {
             .le_u32()
             .map_err(HeaderError::factory(HeaderErrorKind::NameTableSize))?;
 
-        let stream_data_size = reader
+        let total_stream_size = reader
             .le_u32()
-            .map_err(HeaderError::factory(HeaderErrorKind::StreamDataSize))?
+            .map_err(HeaderError::factory(HeaderErrorKind::TotalStreamSize))?
             .try_into()
-            .map_err(|_| HeaderError::new(HeaderErrorKind::ZeroStreamDataSize))?;
+            .map_err(|_| HeaderError::new(HeaderErrorKind::ZeroTotalStreamSize))?;
 
         let codec = reader
             .le_u32()
@@ -66,23 +66,7 @@ impl Header {
             .advance_to(base_header_size)
             .map_err(HeaderError::factory(HeaderErrorKind::Metadata))?;
 
-        let num_streams_usize = u32::from(num_streams) as usize;
-
-        let mut stream_info = Vec::with_capacity(num_streams_usize);
-
-        for index in 0..num_streams.into() {
-            let mut stream_header = match reader.le_u64() {
-                Ok(n) => RawStreamHeader::from(n).parse(index),
-                Err(e) => Err(StreamError::new_with_source(index, StreamErrorKind::StreamInfo, e)),
-            }?;
-
-            if stream_header.has_chunks {
-                parse_stream_chunks(reader, &mut stream_header)
-                    .map_err(|e| e.into_stream_err(index))?;
-            }
-
-            stream_info.push(stream_header.into());
-        }
+        let mut stream_info = parse_stream_headers(reader, num_streams, total_stream_size)?;
 
         let header_size = base_header_size + stream_headers_size as usize;
 
@@ -94,7 +78,7 @@ impl Header {
         ))?;
 
         if name_table_size != 0 {
-            let mut name_offsets = Vec::with_capacity(num_streams_usize);
+            let mut name_offsets = Vec::with_capacity(u32::from(num_streams) as usize);
 
             for index in 0..num_streams.into() {
                 let offset = reader
@@ -103,7 +87,6 @@ impl Header {
 
                 name_offsets.push(offset);
             }
-
             name_offsets.push(name_table_size);
 
             read_stream_names(reader, &name_offsets, &mut stream_info)?;
@@ -111,7 +94,6 @@ impl Header {
 
         Ok(Self {
             num_streams,
-            stream_data_size,
             codec,
             stream_info: stream_info.into_boxed_slice(),
         })
@@ -185,13 +167,60 @@ impl TryFrom<u32> for Codec {
     }
 }
 
+fn parse_stream_headers<R: Read>(
+    reader: &mut Reader<R>,
+    num_streams: NonZeroU32,
+    total_stream_size: NonZeroU32,
+) -> Result<Vec<StreamInfo>, HeaderError> {
+    let num_streams_usize = u32::from(num_streams) as usize;
+
+    let mut stream_headers = Vec::with_capacity(num_streams_usize);
+    let mut stream_offsets = Vec::with_capacity(num_streams_usize + 1);
+
+    for index in 0..num_streams.into() {
+        let mut stream_header = match reader.le_u64() {
+            Ok(n) => RawStreamHeader::from(n).parse(index),
+            Err(e) => Err(StreamError::new_with_source(index, StreamErrorKind::StreamInfo, e)),
+        }?;
+
+        if stream_header.has_chunks {
+            parse_stream_chunks(reader, &mut stream_header)
+                .map_err(|e| e.into_stream_err(index))?;
+        }
+
+        stream_offsets.push(stream_header.data_offset);
+        stream_headers.push(stream_header);
+    }
+    stream_offsets.push(total_stream_size);
+
+    let mut stream_info = Vec::with_capacity(num_streams_usize);
+
+    for ((size, header), index) in zip(
+        stream_offsets
+            .windows(2)
+            .map(|window| u32::from(window[1]) - u32::from(window[0])),
+        stream_headers,
+    )
+    .zip(0..)
+    {
+        stream_info.push(
+            header.with_stream_size(
+                size.try_into()
+                    .map_err(|_| HeaderError::new(HeaderErrorKind::ZeroStreamSize { index }))?,
+            ),
+        );
+    }
+
+    Ok(stream_info)
+}
+
 #[bitsize(64)]
 #[derive(FromBits)]
 struct RawStreamHeader {
     has_chunks: bool,
     sample_rate: u4,
     channels: u2,
-    data_offset: u27,
+    data_offset: u27, // TODO: make u26
     num_samples: u30,
 }
 
@@ -449,19 +478,21 @@ struct StreamInfo {
     sample_rate: NonZeroU32,
     channels: NonZeroU8,
     num_samples: NonZeroU32,
+    size: NonZeroU32,
     stream_loop: Option<Loop>,
     dsp_coeffs: Option<Box<[i16]>>,
     name: Option<Box<str>>,
 }
 
-impl From<StreamHeader> for StreamInfo {
-    fn from(value: StreamHeader) -> Self {
-        Self {
-            sample_rate: value.sample_rate,
-            channels: value.channels,
-            num_samples: value.num_samples,
-            stream_loop: value.stream_loop,
-            dsp_coeffs: value.dsp_coeffs,
+impl StreamHeader {
+    fn with_stream_size(self, size: NonZeroU32) -> StreamInfo {
+        StreamInfo {
+            sample_rate: self.sample_rate,
+            channels: self.channels,
+            num_samples: self.num_samples,
+            size,
+            stream_loop: self.stream_loop,
+            dsp_coeffs: self.dsp_coeffs,
             name: None,
         }
     }
@@ -569,7 +600,7 @@ mod test {
 
         let data = b"FSB5\x01\x00\x00\x00000000000000";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == StreamDataSize));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == TotalStreamSize));
     }
 
     #[test]
@@ -578,7 +609,7 @@ mod test {
 
         let data = b"FSB5\x01\x00\x00\x00000000000000\x00";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == StreamDataSize));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == TotalStreamSize));
 
         let data = b"FSB5\x01\x00\x00\x000000000000000000";
         reader = Reader::new(data.as_slice());

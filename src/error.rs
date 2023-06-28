@@ -21,12 +21,13 @@ pub(crate) enum HeaderErrorKind {
     ZeroStreams,
     StreamHeadersSize,
     NameTableSize,
-    StreamDataSize,
-    ZeroStreamDataSize,
+    TotalStreamSize,
+    ZeroTotalStreamSize,
     Codec,
     UnknownCodec { flag: u32 },
     Metadata,
     StreamHeader,
+    ZeroStreamSize { index: u32 },
     WrongHeaderSize { expected: usize, actual: usize },
     NameTable,
 }
@@ -91,14 +92,15 @@ impl Display for HeaderError {
             ZeroStreams => f.write_str("number of streams was 0"),
             StreamHeadersSize => f.write_str("failed to read size of stream headers"),
             NameTableSize => f.write_str("failed to read size of name table"),
-            StreamDataSize => f.write_str("failed to read total size of stream data"),
-            ZeroStreamDataSize => f.write_str("total size of stream data was 0 bytes"),
+            TotalStreamSize => f.write_str("failed to read total size of stream data"),
+            ZeroTotalStreamSize => f.write_str("total size of stream data was 0 bytes"),
             Codec => f.write_str("failed to read codec flag"),
             UnknownCodec { flag } => {
                 f.write_str(&format!("codec flag was not recognized (0x{flag:08x})"))
             }
             Metadata => f.write_str("failed to read (unused) metadata bytes"),
             StreamHeader => f.write_str("failed to parse stream header"),
+            ZeroStreamSize { index } => f.write_str(&format!("size of data of stream at index {index} was 0 bytes")),
             WrongHeaderSize { expected, actual } => {
                 f.write_str(&format!("total size of base header and stream headers ({actual} bytes) was different from expected ({expected} bytes)"))
             }
