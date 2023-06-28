@@ -14,6 +14,7 @@ use std::{
 #[derive(Debug)]
 struct Header {
     num_streams: NonZeroU32,
+    stream_data_size: NonZeroU32,
     codec: Codec,
     stream_info: Box<[StreamInfo]>,
 }
@@ -47,7 +48,9 @@ impl Header {
 
         let stream_data_size = reader
             .le_u32()
-            .map_err(HeaderError::factory(HeaderErrorKind::StreamDataSize))?;
+            .map_err(HeaderError::factory(HeaderErrorKind::StreamDataSize))?
+            .try_into()
+            .map_err(|_| HeaderError::new(HeaderErrorKind::ZeroStreamDataSize))?;
 
         let codec = reader
             .le_u32()
@@ -108,6 +111,7 @@ impl Header {
 
         Ok(Self {
             num_streams,
+            stream_data_size,
             codec,
             stream_info: stream_info.into_boxed_slice(),
         })
