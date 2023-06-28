@@ -687,16 +687,16 @@ mod test {
         assert_eq!(mode.has_chunks(), has_chunks);
 
         let sample_rate_flag = (data >> 1) & 0x0F;
-        assert_eq!(u64::from(mode.sample_rate().value()), sample_rate_flag);
+        assert_eq!(u64::from(mode.sample_rate()), sample_rate_flag);
 
         let channels_flag = (data >> 5) & 0x03;
-        assert_eq!(u64::from(mode.channels().value()), channels_flag);
+        assert_eq!(u64::from(mode.channels()), channels_flag);
 
         let data_offset = ((data >> 7) & 0x07FF_FFFF) << 5;
-        assert_eq!(u64::from(mode.data_offset().value()) * 32, data_offset);
+        assert_eq!(u64::from(mode.data_offset()) * 32, data_offset);
 
         let num_samples = (data >> 34) & 0x3FFF_FFFF;
-        assert_eq!(u64::from(mode.num_samples().value()), num_samples);
+        assert_eq!(u64::from(mode.num_samples()), num_samples);
     }
 
     #[test]
@@ -743,10 +743,10 @@ mod test {
         assert_eq!(flags.more_chunks(), more_chunks);
 
         let size = (data >> 1) & 0x00FF_FFFF;
-        assert_eq!(flags.size().value(), size);
+        assert_eq!(u32::from(flags.size()), size);
 
         let kind = (data >> 25) & 0x7F;
-        assert_eq!(u32::from(flags.kind().value()), kind);
+        assert_eq!(u32::from(flags.kind()), kind);
     }
 
     #[test]
