@@ -353,9 +353,6 @@ fn parse_stream_chunks<R: Read>(
             XwmaConfig => {
                 todo!()
             }
-            VorbisSeekTable => {
-                todo!()
-            }
             VorbisIntraLayers => {
                 let layers = reader
                     .le_u32()
@@ -765,5 +762,12 @@ mod test {
         for flag in 16..128 {
             test_invalid_flag(flag);
         }
+    }
+
+    #[test]
+    fn it_works() {
+        let data = include_bytes!("../test-data/act13d0d0/m_sys_midautumn20.fsb");
+        let mut reader = Reader::new(data.as_slice());
+        println!("{:#?}", Header::parse(&mut reader));
     }
 }
