@@ -133,7 +133,6 @@ pub(crate) struct StreamError {
 pub(crate) enum StreamErrorKind {
     StreamInfo,
     UnknownSampleRate { flag: u8 },
-    ZeroDataOffset,
     ZeroSamples,
     Chunk,
 }
@@ -189,7 +188,6 @@ impl Display for StreamError {
             UnknownSampleRate { flag } => {
                 f.write_str(&format!("sample rate flag was not recognized (0x{flag:02x})"))
             }
-            ZeroDataOffset => f.write_str("stream data offset was 0"),
             ZeroSamples => f.write_str("number of samples was 0"),
             Chunk => f.write_str("failed to parse stream header chunk"),
         }?;

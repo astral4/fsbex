@@ -9,7 +9,6 @@ use std::{
     ffi::CStr,
     io::Read,
     num::{NonZeroU32, NonZeroU8},
-    ops::Mul,
 };
 
 #[derive(Debug)]
@@ -58,8 +57,8 @@ impl Header {
             .try_into()?;
 
         let base_header_size = match version {
-            Version::V0 => 60,
-            Version::V1 => 64,
+            Version::V0 => 64,
+            Version::V1 => 60,
         };
 
         reader
@@ -191,14 +190,12 @@ fn parse_stream_headers<R: Read>(
         stream_offsets.push(stream_header.data_offset);
         stream_headers.push(stream_header);
     }
-    stream_offsets.push(total_stream_size);
+    stream_offsets.push(total_stream_size.into());
 
     let mut stream_info = Vec::with_capacity(num_streams_usize);
 
     for ((size, header), index) in zip(
-        stream_offsets
-            .windows(2)
-            .map(|window| u32::from(window[1]) - u32::from(window[0])),
+        stream_offsets.windows(2).map(|window| window[1] - window[0]),
         stream_headers,
     )
     .zip(0..)
@@ -220,7 +217,7 @@ struct RawStreamHeader {
     has_chunks: bool,
     sample_rate: u4,
     channels: u2,
-    data_offset: u27, // TODO: make u26
+    data_offset: u27,
     num_samples: u30,
 }
 
@@ -229,7 +226,7 @@ struct StreamHeader {
     has_chunks: bool,
     sample_rate: NonZeroU32,
     channels: NonZeroU8,
-    data_offset: NonZeroU32,
+    data_offset: u32,
     num_samples: NonZeroU32,
     stream_loop: Option<Loop>,
     dsp_coeffs: Option<Box<[i16]>>,
@@ -267,13 +264,6 @@ impl RawStreamHeader {
         .try_into()
         .unwrap();
 
-        let data_offset = self
-            .data_offset()
-            .value()
-            .mul(32)
-            .try_into()
-            .map_err(|_| StreamError::new(stream_index, StreamErrorKind::ZeroDataOffset))?;
-
         let num_samples = self
             .num_samples()
             .value()
@@ -284,7 +274,7 @@ impl RawStreamHeader {
             has_chunks: self.has_chunks(),
             sample_rate,
             channels,
-            data_offset,
+            data_offset: self.data_offset().value() * 32,
             num_samples,
             stream_loop: None,
             dsp_coeffs: None,
@@ -478,9 +468,9 @@ struct StreamInfo {
     sample_rate: NonZeroU32,
     channels: NonZeroU8,
     num_samples: NonZeroU32,
-    size: NonZeroU32,
     stream_loop: Option<Loop>,
     dsp_coeffs: Option<Box<[i16]>>,
+    size: NonZeroU32,
     name: Option<Box<str>>,
 }
 
@@ -490,9 +480,9 @@ impl StreamHeader {
             sample_rate: self.sample_rate,
             channels: self.channels,
             num_samples: self.num_samples,
-            size,
             stream_loop: self.stream_loop,
             dsp_coeffs: self.dsp_coeffs,
+            size,
             name: None,
         }
     }
@@ -708,10 +698,6 @@ mod test {
             .parse(0)
             .is_err_and(|e| e.kind() == UnknownSampleRate { flag: 0b1110 }));
 
-        let data = 0b011010000101100111100000001011_000000000000000000000000000_11_0000_0;
-        let mode = RawStreamHeader::from(data);
-        assert!(mode.parse(0).is_err_and(|e| e.kind() == ZeroDataOffset));
-
         let data = 0b000000000000000000000000000000_111001101101001101000100110_11_0000_0;
         let mode = RawStreamHeader::from(data);
         assert!(mode.parse(0).is_err_and(|e| e.kind() == ZeroSamples));
@@ -724,7 +710,7 @@ mod test {
                 has_chunks: false,
                 sample_rate: NonZeroU32::new(44100).unwrap(),
                 channels: NonZeroU8::new(2).unwrap(),
-                data_offset: NonZeroU32::new(32).unwrap(),
+                data_offset: 32,
                 num_samples: NonZeroU32::new(1).unwrap(),
                 stream_loop: None,
                 dsp_coeffs: None,
