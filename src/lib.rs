@@ -27,6 +27,5 @@
     unused_tuple_struct_fields
 )]
 
-mod error;
 mod header;
 mod read;

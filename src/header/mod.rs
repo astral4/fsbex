@@ -1,13 +1,14 @@
-use crate::error::{
+use crate::read::Reader;
+mod error;
+use bilge::prelude::*;
+use error::{
     ChunkError, ChunkErrorKind, HeaderError, HeaderErrorKind, NameError, NameErrorKind,
     StreamError, StreamErrorKind,
 };
-use crate::read::Reader;
-use bilge::prelude::*;
-use std::iter::zip;
 use std::{
     ffi::CStr,
     io::Read,
+    iter::zip,
     num::{NonZeroU32, NonZeroU8},
 };
 
@@ -347,12 +348,6 @@ fn parse_stream_chunks<R: Read>(
 
                 stream.dsp_coeffs = Some(dsp_coeffs.into_boxed_slice());
             }
-            Atrac9Config => {
-                todo!()
-            }
-            XwmaConfig => {
-                todo!()
-            }
             VorbisIntraLayers => {
                 let layers = reader
                     .le_u32()
@@ -508,9 +503,9 @@ fn read_stream_names<R: Read>(
 
 #[cfg(test)]
 mod test {
-    use super::{Header, RawStreamChunk, RawStreamHeader, StreamHeader, FSB5_MAGIC};
     #[allow(clippy::enum_glob_use)]
-    use crate::error::{ChunkErrorKind::*, HeaderErrorKind::*, StreamErrorKind::*};
+    use super::error::{ChunkErrorKind::*, HeaderErrorKind::*, StreamErrorKind::*};
+    use super::{Header, RawStreamChunk, RawStreamHeader, StreamHeader, FSB5_MAGIC};
     use crate::read::Reader;
     use std::num::{NonZeroU32, NonZeroU8};
 
@@ -762,12 +757,5 @@ mod test {
         for flag in 16..128 {
             test_invalid_flag(flag);
         }
-    }
-
-    #[test]
-    fn it_works() {
-        let data = include_bytes!("../test-data/act13d0d0/m_sys_midautumn20.fsb");
-        let mut reader = Reader::new(data.as_slice());
-        println!("{:#?}", Header::parse(&mut reader));
     }
 }
