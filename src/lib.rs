@@ -27,5 +27,6 @@
     unused_tuple_struct_fields
 )]
 
+mod bank;
 mod header;
 mod read;

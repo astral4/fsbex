@@ -1,5 +1,5 @@
 use crate::read::Reader;
-mod error;
+pub(crate) mod error;
 use bilge::prelude::*;
 use error::{
     ChunkError, ChunkErrorKind, HeaderError, HeaderErrorKind, NameError, NameErrorKind,
@@ -13,14 +13,14 @@ use std::{
 };
 
 #[derive(Debug)]
-struct Header {
+pub(crate) struct Header {
     num_streams: NonZeroU32,
     codec: Codec,
     stream_info: Box<[StreamInfo]>,
 }
 
 impl Header {
-    fn parse<R: Read>(reader: &mut Reader<R>) -> Result<Self, HeaderError> {
+    pub(crate) fn parse<R: Read>(reader: &mut Reader<R>) -> Result<Self, HeaderError> {
         match reader.take() {
             Ok(data) if data == FSB5_MAGIC => Ok(()),
             Err(e) => Err(HeaderError::new_with_source(HeaderErrorKind::Magic, e)),
