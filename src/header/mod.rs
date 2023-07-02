@@ -623,7 +623,7 @@ mod test {
 
         let err_v1_data = {
             let mut buf = Vec::from(V1_HEADER_BASE);
-            buf.append(&mut vec![0; 32]);
+            buf.append(&mut vec![0; 28]);
             buf
         };
         reader = Reader::new(&err_v1_data);
@@ -631,7 +631,7 @@ mod test {
 
         let ok_v0_data = {
             let mut buf = Vec::from(V0_HEADER_BASE);
-            buf.append(&mut vec![0; 32]);
+            buf.append(&mut vec![0; 36]);
             buf
         };
         reader = Reader::new(&ok_v0_data);
@@ -639,7 +639,7 @@ mod test {
 
         let ok_v1_data = {
             let mut buf = Vec::from(V1_HEADER_BASE);
-            buf.append(&mut vec![0; 36]);
+            buf.append(&mut vec![0; 32]);
             buf
         };
         reader = Reader::new(&ok_v1_data);
@@ -648,7 +648,7 @@ mod test {
 
     #[test]
     fn read_stream_info() {
-        let data = b"FSB5\x01\x00\x00\x00\x01\x00\x00\x00000000000000\x01\x00\x00\x000000000000000000000000000000000000000000";
+        let data = b"FSB5\x01\x00\x00\x00\x01\x00\x00\x00000000000000\x01\x00\x00\x00000000000000000000000000000000000000";
         let mut reader = Reader::new(data.as_slice());
         assert!(Header::parse(&mut reader).is_err_and(|e| e.is_stream_err_kind(StreamInfo)));
     }
@@ -724,7 +724,7 @@ mod test {
 
     #[test]
     fn parse_stream_chunk() {
-        const DATA: &[u8; 72] = b"FSB5\x01\x00\x00\x00\x01\x00\x00\x00000000000000\x01\x00\x00\x00000000000000000000000000000000000000\x010000000";
+        const DATA: &[u8; 68] = b"FSB5\x01\x00\x00\x00\x01\x00\x00\x00000000000000\x01\x00\x00\x0000000000000000000000000000000000\x010000000";
 
         let mut reader;
 
