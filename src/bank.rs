@@ -1,11 +1,11 @@
+use crate::encode::error::EncodeError;
+use crate::header::{error::HeaderError, Codec, Header, StreamInfo};
+use crate::read::Reader;
 use std::{
     error::Error,
     fmt::{Display, Formatter, Result as FmtResult},
     io::{Read, Write},
 };
-
-use crate::header::{error::HeaderError, Codec, Header, StreamInfo};
-use crate::read::Reader;
 
 struct Bank<R: Read> {
     header: Header,
@@ -97,9 +97,3 @@ impl<E: 'static + Error> Error for ProcessError<E> {
         Some(&self.source)
     }
 }
-
-struct EncodeError {
-    source: EncodeErrorSource,
-}
-
-enum EncodeErrorSource {}

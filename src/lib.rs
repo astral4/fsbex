@@ -28,5 +28,6 @@
 )]
 
 mod bank;
+mod encode;
 mod header;
 mod read;
