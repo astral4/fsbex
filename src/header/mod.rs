@@ -14,9 +14,8 @@ use std::{
 
 #[derive(Debug)]
 pub(crate) struct Header {
-    num_streams: NonZeroU32,
-    codec: Codec,
-    stream_info: Box<[StreamInfo]>,
+    pub(crate) codec: Codec,
+    pub(crate) stream_info: Vec<StreamInfo>,
 }
 
 impl Header {
@@ -32,7 +31,7 @@ impl Header {
             .map_err(HeaderError::factory(HeaderErrorKind::Version))?
             .try_into()?;
 
-        let num_streams: NonZeroU32 = reader
+        let num_streams = reader
             .le_u32()
             .map_err(HeaderError::factory(HeaderErrorKind::StreamCount))?
             .try_into()
@@ -92,11 +91,7 @@ impl Header {
             read_stream_names(reader, &name_offsets, &mut stream_info)?;
         }
 
-        Ok(Self {
-            num_streams,
-            codec,
-            stream_info: stream_info.into_boxed_slice(),
-        })
+        Ok(Self { codec, stream_info })
     }
 }
 
@@ -119,8 +114,8 @@ impl TryFrom<u32> for Version {
     }
 }
 
-#[derive(Debug)]
-enum Codec {
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum Codec {
     Pcm8,
     Pcm16,
     Pcm24,
@@ -456,7 +451,7 @@ impl Loop {
 }
 
 #[derive(Debug)]
-struct StreamInfo {
+pub(crate) struct StreamInfo {
     sample_rate: NonZeroU32,
     channels: NonZeroU8,
     num_samples: NonZeroU32,
