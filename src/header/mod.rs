@@ -436,7 +436,7 @@ impl RawStreamChunk {
 }
 
 #[derive(Debug, PartialEq)]
-struct Loop {
+pub(crate) struct Loop {
     start: u32,
     len: NonZeroU32,
 }
@@ -452,13 +452,13 @@ impl Loop {
 
 #[derive(Debug)]
 pub(crate) struct StreamInfo {
-    sample_rate: NonZeroU32,
-    channels: NonZeroU8,
-    num_samples: NonZeroU32,
-    stream_loop: Option<Loop>,
-    dsp_coeffs: Option<Box<[i16]>>,
-    size: NonZeroU32,
-    name: Option<Box<str>>,
+    pub(crate) sample_rate: NonZeroU32,
+    pub(crate) channels: NonZeroU8,
+    pub(crate) num_samples: NonZeroU32,
+    pub(crate) stream_loop: Option<Loop>,
+    pub(crate) dsp_coeffs: Option<Box<[i16]>>,
+    pub(crate) size: NonZeroU32,
+    pub(crate) name: Option<Box<str>>,
 }
 
 impl StreamHeader {
