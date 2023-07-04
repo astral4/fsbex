@@ -1,3 +1,4 @@
+use super::pcm::PcmError;
 use super::vorbis::VorbisError;
 use crate::read::ReadError;
 use std::{
@@ -13,31 +14,22 @@ pub(crate) struct EncodeError {
 
 #[derive(Debug)]
 pub(super) enum EncodeErrorKind {
+    Pcm,
     Vorbis,
 }
 
 #[derive(Debug)]
 enum EncodeErrorSource {
     Read(ReadError),
+    Pcm(PcmError),
     Vorbis(VorbisError),
 }
 
-impl EncodeError {
-    pub(super) fn new(kind: EncodeErrorKind) -> Self {
-        Self { kind, source: None }
-    }
-
-    pub(super) fn factory(kind: EncodeErrorKind) -> impl FnOnce(ReadError) -> Self {
-        |source| Self {
-            kind,
-            source: Some(EncodeErrorSource::Read(source)),
-        }
-    }
-
-    pub(super) fn from_vorbis(source: VorbisError) -> Self {
+impl From<PcmError> for EncodeError {
+    fn from(value: PcmError) -> Self {
         Self {
-            kind: EncodeErrorKind::Vorbis,
-            source: Some(EncodeErrorSource::Vorbis(source)),
+            kind: EncodeErrorKind::Pcm,
+            source: Some(EncodeErrorSource::Pcm(value)),
         }
     }
 }
@@ -56,6 +48,7 @@ impl Display for EncodeError {
         f.write_str(&format!(
             "an error occurred while encoding a {} stream",
             match &self.kind {
+                EncodeErrorKind::Pcm => "PCM",
                 EncodeErrorKind::Vorbis => "Vorbis",
             }
         ))
@@ -67,6 +60,7 @@ impl Error for EncodeError {
         match &self.source {
             Some(source) => match source {
                 EncodeErrorSource::Read(e) => Some(e),
+                EncodeErrorSource::Pcm(e) => Some(e),
                 EncodeErrorSource::Vorbis(e) => Some(e),
             },
             None => None,
