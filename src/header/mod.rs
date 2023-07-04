@@ -447,7 +447,7 @@ impl RawStreamChunk {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct Loop {
     start: u32,
     len: NonZeroU32,
@@ -462,7 +462,7 @@ impl Loop {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct StreamInfo {
     pub(crate) sample_rate: NonZeroU32,
     pub(crate) channels: NonZeroU8,

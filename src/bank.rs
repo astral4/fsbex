@@ -1,13 +1,13 @@
 use crate::header::{error::HeaderError, Header};
 use crate::read::Reader;
-use crate::stream::LazyStream;
+use crate::stream::{LazyStream, Stream, StreamIntoIter};
 use std::{
     error::Error,
     fmt::{Display, Formatter, Result as FmtResult},
     io::Read,
 };
 
-struct Bank<R: Read> {
+pub(crate) struct Bank<R: Read> {
     header: Header,
     read: Reader<R>,
 }
@@ -28,6 +28,21 @@ impl<R: Read> Bank<R> {
                 .map_err(|e| ProcessError::new(index, e))?;
         }
         Ok(())
+    }
+}
+
+impl<R: Read> From<Bank<R>> for StreamIntoIter<R> {
+    fn from(value: Bank<R>) -> Self {
+        Self::new(value.header.stream_info, value.header.codec, value.read)
+    }
+}
+
+impl<R: Read> IntoIterator for Bank<R> {
+    type IntoIter = StreamIntoIter<R>;
+    type Item = Stream;
+
+    fn into_iter(self) -> Self::IntoIter {
+        Self::IntoIter::from(self)
     }
 }
 
