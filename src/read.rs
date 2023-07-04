@@ -70,13 +70,13 @@ impl<R: Read> Reader<R> {
         self.position
     }
 
-    pub(crate) fn take<const LEN: usize>(&mut self) -> ReadResult<[u8; LEN]> {
+    pub(crate) fn take_const<const LEN: usize>(&mut self) -> ReadResult<[u8; LEN]> {
         let mut buf = [0; LEN];
         Self::read_to_array(self, &mut buf)?;
         Ok(buf)
     }
 
-    pub(crate) fn take_len(&mut self, len: usize) -> ReadResult<Vec<u8>> {
+    pub(crate) fn take(&mut self, len: usize) -> ReadResult<Vec<u8>> {
         let mut buf = vec![0; len];
         Self::read_to_slice(self, &mut buf)?;
         Ok(buf)
@@ -206,12 +206,12 @@ mod test {
         let data = b"abc123";
         let mut reader = Reader::new(data.as_slice());
 
-        assert_eq!(reader.take().unwrap(), [97]);
-        assert_eq!(reader.take().unwrap(), [98, 99]);
-        assert_eq!(reader.take().unwrap(), [49, 50, 51]);
-        assert_eq!(reader.take().unwrap(), []);
+        assert_eq!(reader.take_const().unwrap(), [97]);
+        assert_eq!(reader.take_const().unwrap(), [98, 99]);
+        assert_eq!(reader.take_const().unwrap(), [49, 50, 51]);
+        assert_eq!(reader.take_const().unwrap(), []);
         assert!(reader
-            .take::<1>()
+            .take_const::<1>()
             .is_err_and(|e| e
                 .is_kind(ReadErrorKind::Incomplete(Needed::Size(NonZeroUsize::new(1).unwrap())))));
     }

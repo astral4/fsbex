@@ -2,7 +2,7 @@ use super::vorbis_lookup::VORBIS_LOOKUP;
 use crate::header::StreamInfo;
 use crate::read::{ReadError, Reader};
 use lewton::{
-    audio::{read_audio_packet_generic, AudioReadError, PreviousWindowRight},
+    audio::{read_audio_packet_generic, PreviousWindowRight},
     header::{read_header_ident, read_header_setup, IdentHeader, SetupHeader},
     samples::Samples,
 };
@@ -51,7 +51,7 @@ pub(super) fn encode<R: Read, W: Write>(
         }
 
         let packet = source
-            .take_len(packet_size as usize)
+            .take(packet_size as usize)
             .map_err(VorbisError::from_read(VorbisErrorKind::ReadPacket))?;
 
         let block: Block =
