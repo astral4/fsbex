@@ -226,6 +226,7 @@ struct StreamHeader {
     num_samples: NonZeroU32,
     stream_loop: Option<Loop>,
     dsp_coeffs: Option<Box<[i16]>>,
+    vorbis_crc32: Option<u32>,
 }
 
 impl RawStreamHeader {
@@ -274,6 +275,7 @@ impl RawStreamHeader {
             num_samples,
             stream_loop: None,
             dsp_coeffs: None,
+            vorbis_crc32: None,
         })
     }
 }
@@ -342,6 +344,13 @@ fn parse_stream_chunks<R: Read>(
                 }
 
                 stream.dsp_coeffs = Some(dsp_coeffs.into_boxed_slice());
+            }
+            VorbisSeekTable => {
+                let crc32 = reader
+                    .le_u32()
+                    .map_err(ChunkError::factory(index, ChunkErrorKind::VorbisCrc32))?;
+
+                stream.vorbis_crc32 = Some(crc32);
             }
             VorbisIntraLayers => {
                 let layers = reader
@@ -701,6 +710,7 @@ mod test {
                 num_samples: NonZeroU32::new(1).unwrap(),
                 stream_loop: None,
                 dsp_coeffs: None,
+                vorbis_crc32: None,
             }
         );
     }

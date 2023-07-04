@@ -227,6 +227,7 @@ pub(crate) enum ChunkErrorKind {
     LoopEnd,
     ZeroLengthLoop,
     DspCoefficients,
+    VorbisCrc32,
     VorbisLayerCount,
     TooManyVorbisLayers { layers: u32 },
     ZeroVorbisLayers,
@@ -281,6 +282,7 @@ impl Display for ChunkError {
             LoopEnd => f.write_str("failed to read ending position of loop in stream"),
             ZeroLengthLoop => f.write_str("length of loop in stream was 0"),
             DspCoefficients => f.write_str("failed to read DSP coefficients of stream"),
+            VorbisCrc32 => f.write_str("failed to read CRC32 of Vorbis setup header"),
             VorbisLayerCount => {
                 f.write_str("failed to read number of layers per channel in Vorbis stream")
             }
