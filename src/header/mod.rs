@@ -14,7 +14,7 @@ use std::{
 
 #[derive(Debug)]
 pub(crate) struct Header {
-    pub(crate) codec: Codec,
+    pub(crate) format: AudioFormat,
     pub(crate) stream_info: Box<[StreamInfo]>,
 }
 
@@ -51,9 +51,9 @@ impl Header {
             .try_into()
             .map_err(|_| HeaderError::new(HeaderErrorKind::ZeroTotalStreamSize))?;
 
-        let codec = reader
+        let format = reader
             .le_u32()
-            .map_err(HeaderError::factory(HeaderErrorKind::Codec))?
+            .map_err(HeaderError::factory(HeaderErrorKind::AudioFormat))?
             .try_into()?;
 
         let base_header_size = match version {
@@ -92,7 +92,7 @@ impl Header {
         }
 
         Ok(Self {
-            codec,
+            format,
             stream_info: stream_info.into_boxed_slice(),
         })
     }
@@ -118,7 +118,7 @@ impl TryFrom<u32> for Version {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) enum Codec {
+pub(crate) enum AudioFormat {
     Pcm8,
     Pcm16,
     Pcm24,
@@ -138,7 +138,7 @@ pub(crate) enum Codec {
     Opus,
 }
 
-impl TryFrom<u32> for Codec {
+impl TryFrom<u32> for AudioFormat {
     type Error = HeaderError;
 
     fn try_from(value: u32) -> Result<Self, Self::Error> {
@@ -160,7 +160,7 @@ impl TryFrom<u32> for Codec {
             15 => Ok(Self::Vorbis),
             16 => Ok(Self::FAdpcm),
             17 => Ok(Self::Opus),
-            flag => Err(HeaderError::new(HeaderErrorKind::UnknownCodec { flag })),
+            flag => Err(HeaderError::new(HeaderErrorKind::UnknownAudioFormat { flag })),
         }
     }
 }
@@ -604,20 +604,22 @@ mod test {
 
         let data = b"FSB5\x01\x00\x00\x000000000000000000";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == Codec));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == AudioFormat));
     }
 
     #[test]
-    fn read_codec() {
+    fn read_audio_format() {
         let mut reader;
 
         let data = b"FSB5\x01\x00\x00\x000000000000000000\x00";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == Codec));
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == AudioFormat));
 
         let data = b"FSB5\x01\x00\x00\x000000000000000000\x00\x00\x00\x00";
         reader = Reader::new(data.as_slice());
-        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == UnknownCodec { flag: 0 }));
+        assert!(
+            Header::parse(&mut reader).is_err_and(|e| e.kind() == UnknownAudioFormat { flag: 0 })
+        );
 
         let data = b"FSB5\x01\x00\x00\x000000000000000000\x01\x00\x00\x00";
         reader = Reader::new(data.as_slice());

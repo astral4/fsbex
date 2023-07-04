@@ -24,7 +24,7 @@ impl<R: Read> Bank<R> {
         F: Fn(LazyStream<'_, R>) -> Result<(), E>,
     {
         for (info, index) in self.header.stream_info.iter().zip(0..) {
-            f(LazyStream::new(index, info, self.header.codec, &mut self.read))
+            f(LazyStream::new(index, info, self.header.format, &mut self.read))
                 .map_err(|e| ProcessError::new(index, e))?;
         }
         Ok(())
@@ -33,7 +33,7 @@ impl<R: Read> Bank<R> {
 
 impl<R: Read> From<Bank<R>> for StreamIntoIter<R> {
     fn from(value: Bank<R>) -> Self {
-        Self::new(value.header.stream_info, value.header.codec, value.read)
+        Self::new(value.header.stream_info, value.header.format, value.read)
     }
 }
 
