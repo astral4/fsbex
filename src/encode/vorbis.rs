@@ -46,22 +46,18 @@ pub(super) fn encode<R: Read, W: Write>(
             .le_u16()
             .map_err(VorbisError::from_read(VorbisErrorKind::ReadPacket))?;
 
+        if packet_size == u16::MIN || packet_size == u16::MAX {
+            break;
+        }
+
         let packet = source
             .take_len(packet_size as usize)
             .map_err(VorbisError::from_read(VorbisErrorKind::ReadPacket))?;
 
-        let block = match read_audio_packet_generic::<Block>(
-            &id_header,
-            &setup_header,
-            packet.as_slice(),
-            &mut window,
-        ) {
-            Ok(block) => Ok(block),
-            Err(e) => match e {
-                AudioReadError::EndOfPacket => break,
-                _ => Err(VorbisError::from_lewton(VorbisErrorKind::DecodePacket)(e.into())),
-            },
-        }?;
+        let block: Block =
+            read_audio_packet_generic(&id_header, &setup_header, packet.as_slice(), &mut window)
+                .map_err(Into::into)
+                .map_err(VorbisError::from_lewton(VorbisErrorKind::DecodePacket))?;
 
         encoder
             .encode_audio_block(block.0)
@@ -82,7 +78,8 @@ fn init_headers(
     channels: u8,
     crc32: u32,
 ) -> Result<(IdentHeader, SetupHeader), VorbisError> {
-    let id_header_data = init_id_header_data(sample_rate, channels).expect("");
+    let id_header_data = init_id_header_data(sample_rate, channels)
+        .expect("writing to an in-memory buffer is infallible");
 
     let id_header = read_header_ident(id_header_data.as_slice())
         .map_err(Into::into)
