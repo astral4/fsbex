@@ -5,7 +5,7 @@ use std::io::{Read, Write};
 
 pub(crate) struct LazyStream<'bank, R: Read> {
     index: u32,
-    info: StreamInfo,
+    info: &'bank StreamInfo,
     codec: Codec,
     reader: &'bank mut Reader<R>,
 }
@@ -13,7 +13,7 @@ pub(crate) struct LazyStream<'bank, R: Read> {
 impl<'bank, R: Read> LazyStream<'bank, R> {
     pub(crate) fn new(
         index: u32,
-        info: StreamInfo,
+        info: &'bank StreamInfo,
         codec: Codec,
         reader: &'bank mut Reader<R>,
     ) -> Self {

@@ -15,7 +15,7 @@ use std::{
 #[derive(Debug)]
 pub(crate) struct Header {
     pub(crate) codec: Codec,
-    pub(crate) stream_info: Vec<StreamInfo>,
+    pub(crate) stream_info: Box<[StreamInfo]>,
 }
 
 impl Header {
@@ -91,7 +91,10 @@ impl Header {
             read_stream_names(reader, &name_offsets, &mut stream_info)?;
         }
 
-        Ok(Self { codec, stream_info })
+        Ok(Self {
+            codec,
+            stream_info: stream_info.into_boxed_slice(),
+        })
     }
 }
 

@@ -23,7 +23,7 @@ impl<R: Read> Bank<R> {
     where
         F: Fn(LazyStream<'_, R>) -> Result<(), E>,
     {
-        for (info, index) in self.header.stream_info.into_iter().zip(0..) {
+        for (info, index) in self.header.stream_info.iter().zip(0..) {
             f(LazyStream::new(index, info, self.header.codec, &mut self.read))
                 .map_err(|e| ProcessError::new(index, e))?;
         }
@@ -57,13 +57,13 @@ impl Error for DecodeError {
 }
 
 #[derive(Debug)]
-struct ProcessError<E> {
+pub(crate) struct ProcessError<E> {
     index: u32,
     source: E,
 }
 
 impl<E> ProcessError<E> {
-    fn new(index: u32, source: E) -> Self {
+    pub(crate) fn new(index: u32, source: E) -> Self {
         Self { index, source }
     }
 }
