@@ -141,7 +141,7 @@ impl Samples for Block {
 }
 
 #[derive(Debug)]
-pub(super) struct VorbisError {
+pub(crate) struct VorbisError {
     kind: VorbisErrorKind,
     source: Option<VorbisErrorSource>,
 }

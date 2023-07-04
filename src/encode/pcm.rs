@@ -17,7 +17,7 @@ pub(super) fn encode<R: Read, W: Write>(
 }
 
 #[derive(Debug)]
-pub(super) struct PcmError {
+pub(crate) struct PcmError {
     kind: PcmErrorKind,
     source: PcmErrorSource,
 }
