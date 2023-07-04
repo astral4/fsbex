@@ -12,13 +12,7 @@ pub(crate) fn encode<R: Read, W: Write>(
     sink: W,
 ) -> Result<(), error::EncodeError> {
     match codec {
-        Codec::Vorbis => vorbis::encode(
-            u32::from(info.size) as usize,
-            info.sample_rate,
-            info.channels,
-            source,
-            sink,
-        )?,
+        Codec::Vorbis => vorbis::encode(info, source, sink)?,
         _ => todo!(),
     }
 

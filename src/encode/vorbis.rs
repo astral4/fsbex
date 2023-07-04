@@ -1,3 +1,4 @@
+use crate::header::StreamInfo;
 use crate::read::{ReadError, Reader};
 use lewton::{
     audio::{read_audio_packet_generic, AudioReadError, PreviousWindowRight},
@@ -13,19 +14,17 @@ use std::{
 use vorbis_rs::{VorbisBitrateManagementStrategy, VorbisEncoder};
 
 pub(super) fn encode<R: Read, W: Write>(
-    size: usize,
-    sample_rate: NonZeroU32,
-    channels: NonZeroU8,
+    info: &StreamInfo,
     source: &mut Reader<R>,
     sink: W,
 ) -> Result<(), VorbisError> {
-    let (id_header, setup_header) = init_headers(sample_rate, channels)?;
+    let (id_header, setup_header) = init_headers(info.sample_rate, info.channels)?;
 
     let mut encoder = VorbisEncoder::new(
         0,
         [("", "")],
-        sample_rate,
-        channels,
+        info.sample_rate,
+        info.channels,
         VorbisBitrateManagementStrategy::QualityVbr {
             target_quality: 1.0,
         },
@@ -37,7 +36,7 @@ pub(super) fn encode<R: Read, W: Write>(
     let start_pos = source.position();
     let mut window = PreviousWindowRight::new();
 
-    while source.position() - start_pos < size {
+    while source.position() - start_pos < u32::from(info.size) as usize {
         let packet_size = source
             .le_u16()
             .map_err(VorbisError::from_read(VorbisErrorKind::ReadPacket))?;
