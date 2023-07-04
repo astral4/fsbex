@@ -1,7 +1,7 @@
 use crate::encode::{encode, error::EncodeError};
 use crate::header::{Codec, StreamInfo};
 use crate::read::Reader;
-use std::io::{Read, Seek, Write};
+use std::io::{Read, Write};
 
 pub(crate) struct LazyStream<'bank, R: Read> {
     index: u32,
@@ -25,7 +25,7 @@ impl<'bank, R: Read> LazyStream<'bank, R> {
         }
     }
 
-    fn write<W: Write + Seek>(self, sink: W) -> Result<(), EncodeError> {
+    fn write<W: Write>(self, sink: W) -> Result<(), EncodeError> {
         encode(self.codec, self.info, self.reader, sink)
     }
 }
@@ -47,7 +47,7 @@ impl Stream {
         }
     }
 
-    fn write<W: Write + Seek>(self, sink: W) -> Result<(), EncodeError> {
+    fn write<W: Write>(self, sink: W) -> Result<(), EncodeError> {
         let mut reader = Reader::new(&*self.data);
         encode(self.codec, &self.info, &mut reader, sink)
     }

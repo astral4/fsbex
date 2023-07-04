@@ -12,7 +12,6 @@ categories = ["encoding", "multimedia::audio", "multimedia::encoding", "parser-i
 
 [dependencies]
 bilge = "0.1.5"
-hound = "3.5.0"
 lewton = { version = "0.10.2", default-features = false }
 phf = { version = "0.11.2", features = ["macros"] }
 vorbis_rs = "0.3.0"
