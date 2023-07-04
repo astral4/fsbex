@@ -97,6 +97,12 @@ impl<R: Read> Reader<R> {
         Ok(buf[0])
     }
 
+    pub(crate) fn le_u16(&mut self) -> ReadResult<u16> {
+        let mut buf = [0; 2];
+        Self::read_to_array(self, &mut buf)?;
+        Ok(u16::from_le_bytes(buf))
+    }
+
     pub(crate) fn le_u32(&mut self) -> ReadResult<u32> {
         let mut buf = [0; 4];
         Self::read_to_array(self, &mut buf)?;

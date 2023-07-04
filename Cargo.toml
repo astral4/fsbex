@@ -12,3 +12,5 @@ categories = ["encoding", "multimedia::audio", "multimedia::encoding", "parser-i
 
 [dependencies]
 bilge = "0.1.5"
+lewton = { version = "0.10.2", default-features = false }
+vorbis_rs = "0.3.0"

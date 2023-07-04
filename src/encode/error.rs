@@ -1,9 +1,9 @@
+use super::vorbis::VorbisError;
 use crate::read::ReadError;
 use std::{
     error::Error,
     fmt::{Display, Formatter, Result as FmtResult},
 };
-use vorbis_rs::VorbisError;
 
 #[derive(Debug)]
 pub(crate) struct EncodeError {
@@ -38,6 +38,15 @@ impl EncodeError {
         Self {
             kind: EncodeErrorKind::Vorbis,
             source: Some(EncodeErrorSource::Vorbis(source)),
+        }
+    }
+}
+
+impl From<VorbisError> for EncodeError {
+    fn from(value: VorbisError) -> Self {
+        Self {
+            kind: EncodeErrorKind::Vorbis,
+            source: Some(EncodeErrorSource::Vorbis(value)),
         }
     }
 }
