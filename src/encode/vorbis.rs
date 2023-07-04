@@ -39,9 +39,10 @@ pub(super) fn encode<R: Read, W: Write>(
     .map_err(VorbisError::from_vorbis(VorbisErrorKind::CreateEncoder))?;
 
     let start_pos = source.position();
+    let stream_size = u32::from(info.size) as usize;
     let mut window = PreviousWindowRight::new();
 
-    while source.position() - start_pos < u32::from(info.size) as usize {
+    while source.position() - start_pos < stream_size {
         let packet_size = source
             .le_u16()
             .map_err(VorbisError::from_read(VorbisErrorKind::ReadPacket))?;
