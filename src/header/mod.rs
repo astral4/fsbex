@@ -466,6 +466,7 @@ pub(crate) struct StreamInfo {
     pub(crate) num_samples: NonZeroU32,
     pub(crate) stream_loop: Option<Loop>,
     pub(crate) dsp_coeffs: Option<Box<[i16]>>,
+    pub(crate) vorbis_crc32: Option<u32>,
     pub(crate) size: NonZeroU32,
     pub(crate) name: Option<Box<str>>,
 }
@@ -478,6 +479,7 @@ impl StreamHeader {
             num_samples: self.num_samples,
             stream_loop: self.stream_loop,
             dsp_coeffs: self.dsp_coeffs,
+            vorbis_crc32: self.vorbis_crc32,
             size,
             name: None,
         }
