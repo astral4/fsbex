@@ -31,3 +31,4 @@ mod bank;
 mod encode;
 mod header;
 mod read;
+mod stream;

@@ -1,10 +1,10 @@
-use crate::encode::{encode, error::EncodeError};
-use crate::header::{error::HeaderError, Codec, Header, StreamInfo};
+use crate::header::{error::HeaderError, Header};
 use crate::read::Reader;
+use crate::stream::LazyStream;
 use std::{
     error::Error,
     fmt::{Display, Formatter, Result as FmtResult},
-    io::{Read, Write},
+    io::Read,
 };
 
 struct Bank<R: Read> {
@@ -24,28 +24,10 @@ impl<R: Read> Bank<R> {
         F: Fn(LazyStream<'_, R>) -> Result<(), E>,
     {
         for (info, index) in self.header.stream_info.into_iter().zip(0..) {
-            f(LazyStream {
-                index,
-                info,
-                codec: self.header.codec,
-                reader: &mut self.read,
-            })
-            .map_err(|e| ProcessError::new(index, e))?;
+            f(LazyStream::new(index, info, self.header.codec, &mut self.read))
+                .map_err(|e| ProcessError::new(index, e))?;
         }
         Ok(())
-    }
-}
-
-struct LazyStream<'bank, R: Read> {
-    index: u32,
-    info: StreamInfo,
-    codec: Codec,
-    reader: &'bank mut Reader<R>,
-}
-
-impl<'bank, R: Read> LazyStream<'bank, R> {
-    fn write<W: Write>(self, sink: W) -> Result<(), EncodeError> {
-        encode(self.codec, &self.info, self.reader, sink)
     }
 }
 
