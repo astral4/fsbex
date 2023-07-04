@@ -1,14 +1,14 @@
 use crate::header::{Codec, StreamInfo};
 use crate::read::Reader;
 use hound::SampleFormat;
-use std::io::{Read, Write};
+use std::io::{Read, Seek, Write};
 
 pub(crate) mod error;
 mod pcm;
 mod vorbis;
 mod vorbis_lookup;
 
-pub(crate) fn encode<R: Read, W: Write>(
+pub(crate) fn encode<R: Read, W: Write + Seek>(
     codec: Codec,
     info: &StreamInfo,
     source: &mut Reader<R>,
