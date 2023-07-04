@@ -206,7 +206,7 @@ impl Display for VorbisError {
             VorbisErrorKind::ReadPacket => "failed to read audio packet from Vorbis stream",
             VorbisErrorKind::DecodePacket => "failed to decode audio packet from Vorbis stream",
             VorbisErrorKind::EncodeBlock => "failed to encode block of samples",
-            VorbisErrorKind::FinishStream => "failed to write all Vorbis stream data",
+            VorbisErrorKind::FinishStream => "failed to finalize writing Vorbis stream data",
         })
     }
 }

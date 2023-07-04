@@ -26,7 +26,7 @@ impl<'bank, R: Read> LazyStream<'bank, R> {
     }
 
     fn write<W: Write>(self, sink: W) -> Result<(), EncodeError> {
-        encode(self.codec, &self.info, self.reader, sink)
+        encode(self.codec, self.info, self.reader, sink)
     }
 }
 
