@@ -4,6 +4,7 @@ use std::io::{Read, Write};
 
 pub(crate) mod error;
 mod vorbis;
+mod vorbis_lookup;
 
 pub(crate) fn encode<R: Read, W: Write>(
     codec: Codec,

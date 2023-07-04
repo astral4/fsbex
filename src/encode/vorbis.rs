@@ -1,15 +1,15 @@
+use super::vorbis_lookup::VORBIS_LOOKUP;
 use crate::header::StreamInfo;
 use crate::read::{ReadError, Reader};
 use lewton::{
     audio::{read_audio_packet_generic, AudioReadError, PreviousWindowRight},
-    header::{read_header_ident, IdentHeader, SetupHeader},
+    header::{read_header_ident, read_header_setup, IdentHeader, SetupHeader},
     samples::Samples,
 };
 use std::{
     error::Error,
     fmt::{Display, Formatter, Result as FmtResult},
     io::{Error as IoError, Read, Write},
-    num::{NonZeroU32, NonZeroU8},
 };
 use vorbis_rs::{VorbisBitrateManagementStrategy, VorbisEncoder};
 
@@ -18,7 +18,12 @@ pub(super) fn encode<R: Read, W: Write>(
     source: &mut Reader<R>,
     sink: W,
 ) -> Result<(), VorbisError> {
-    let (id_header, setup_header) = init_headers(info.sample_rate, info.channels)?;
+    let crc32 = info
+        .vorbis_crc32
+        .ok_or_else(|| VorbisError::new(VorbisErrorKind::Crc32Lookup))?;
+
+    let (id_header, setup_header) =
+        init_headers(info.sample_rate.into(), info.channels.into(), crc32)?;
 
     let mut encoder = VorbisEncoder::new(
         0,
@@ -69,21 +74,36 @@ pub(super) fn encode<R: Read, W: Write>(
         .map_err(VorbisError::from_vorbis(VorbisErrorKind::FinishStream))
 }
 
+const MIN_BLOCK_SIZE_EXP2: u8 = 8;
+const MAX_BLOCK_SIZE_EXP2: u8 = 11;
+
 fn init_headers(
-    sample_rate: NonZeroU32,
-    channels: NonZeroU8,
+    sample_rate: u32,
+    channels: u8,
+    crc32: u32,
 ) -> Result<(IdentHeader, SetupHeader), VorbisError> {
-    let id_header_data = init_id_header_data(sample_rate, channels).unwrap();
+    let id_header_data = init_id_header_data(sample_rate, channels).expect("");
+
     let id_header = read_header_ident(id_header_data.as_slice())
         .map_err(Into::into)
         .map_err(VorbisError::from_lewton(VorbisErrorKind::CreateHeaders))?;
 
-    todo!()
+    let setup_header_data = *VORBIS_LOOKUP
+        .get(&crc32)
+        .ok_or_else(|| VorbisError::new(VorbisErrorKind::Crc32Lookup))?;
+
+    let setup_header = read_header_setup(
+        setup_header_data,
+        channels,
+        (MIN_BLOCK_SIZE_EXP2, MAX_BLOCK_SIZE_EXP2),
+    )
+    .map_err(Into::into)
+    .map_err(VorbisError::from_lewton(VorbisErrorKind::CreateHeaders))?;
+
+    Ok((id_header, setup_header))
 }
 
-fn init_id_header_data(sample_rate: NonZeroU32, channels: NonZeroU8) -> Result<Vec<u8>, IoError> {
-    const MIN_BLOCK_SIZE_EXP2: u8 = 8;
-    const MAX_BLOCK_SIZE_EXP2: u8 = 11;
+fn init_id_header_data(sample_rate: u32, channels: u8) -> Result<Vec<u8>, IoError> {
     const BLOCK_SIZES: u8 = (MAX_BLOCK_SIZE_EXP2 << 4) | (MIN_BLOCK_SIZE_EXP2);
 
     let mut data = Vec::with_capacity(30);
@@ -91,8 +111,8 @@ fn init_id_header_data(sample_rate: NonZeroU32, channels: NonZeroU8) -> Result<V
     data.write_all(&[1])?;
     data.write_all(b"vorbis")?;
     data.write_all(&[0; 4])?;
-    data.write_all(&[channels.into()])?;
-    data.write_all(u32::from(sample_rate).to_le_bytes().as_slice())?;
+    data.write_all(&[channels])?;
+    data.write_all(sample_rate.to_le_bytes().as_slice())?;
     data.write_all(&[0; 4])?;
     data.write_all(&[0; 4])?;
     data.write_all(&[0; 4])?;
@@ -125,12 +145,14 @@ impl Samples for Block {
 #[derive(Debug)]
 pub(super) struct VorbisError {
     kind: VorbisErrorKind,
-    source: VorbisErrorSource,
+    source: Option<VorbisErrorSource>,
 }
 
 #[derive(Debug)]
 enum VorbisErrorKind {
+    MissingCrc32,
     CreateHeaders,
+    Crc32Lookup,
     CreateEncoder,
     ReadPacket,
     DecodePacket,
@@ -146,24 +168,28 @@ enum VorbisErrorSource {
 }
 
 impl VorbisError {
+    fn new(kind: VorbisErrorKind) -> Self {
+        Self { kind, source: None }
+    }
+
     fn from_vorbis(kind: VorbisErrorKind) -> impl FnOnce(vorbis_rs::VorbisError) -> Self {
         |source| Self {
             kind,
-            source: VorbisErrorSource::Encode(source),
+            source: Some(VorbisErrorSource::Encode(source)),
         }
     }
 
     fn from_lewton(kind: VorbisErrorKind) -> impl FnOnce(lewton::VorbisError) -> Self {
         |source| Self {
             kind,
-            source: VorbisErrorSource::Decode(source),
+            source: Some(VorbisErrorSource::Decode(source)),
         }
     }
 
     fn from_read(kind: VorbisErrorKind) -> impl FnOnce(ReadError) -> Self {
         |source| Self {
             kind,
-            source: VorbisErrorSource::Read(source),
+            source: Some(VorbisErrorSource::Read(source)),
         }
     }
 }
@@ -171,7 +197,13 @@ impl VorbisError {
 impl Display for VorbisError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         f.write_str(match self.kind {
+            VorbisErrorKind::MissingCrc32 => {
+                "File header did not contain CRC32 of Vorbis setup header"
+            }
             VorbisErrorKind::CreateHeaders => "failed to create dummy Vorbis headers",
+            VorbisErrorKind::Crc32Lookup => {
+                "CRC32 of Vorbis setup header was not found in lookup table"
+            }
             VorbisErrorKind::CreateEncoder => "failed to create Vorbis stream encoder",
             VorbisErrorKind::ReadPacket => "failed to read audio packet from Vorbis stream",
             VorbisErrorKind::DecodePacket => "failed to decode audio packet from Vorbis stream",
@@ -184,9 +216,12 @@ impl Display for VorbisError {
 impl Error for VorbisError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match &self.source {
-            VorbisErrorSource::Encode(e) => Some(e),
-            VorbisErrorSource::Decode(e) => Some(e),
-            VorbisErrorSource::Read(e) => Some(e),
+            Some(source) => match source {
+                VorbisErrorSource::Encode(e) => Some(e),
+                VorbisErrorSource::Decode(e) => Some(e),
+                VorbisErrorSource::Read(e) => Some(e),
+            },
+            None => None,
         }
     }
 }
