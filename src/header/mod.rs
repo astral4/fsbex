@@ -15,6 +15,7 @@ use std::{
 #[derive(Debug)]
 pub(crate) struct Header {
     pub(crate) format: AudioFormat,
+    pub(crate) flags: u32,
     pub(crate) stream_info: Box<[StreamInfo]>,
 }
 
@@ -56,9 +57,17 @@ impl Header {
             .map_err(HeaderError::factory(HeaderErrorKind::AudioFormat))?
             .try_into()?;
 
-        let base_header_size = match version {
-            Version::V0 => 64,
-            Version::V1 => 60,
+        let (flags, base_header_size) = match version {
+            Version::V0 => (0, 64),
+            Version::V1 => {
+                reader.skip(4).map_err(HeaderError::factory(HeaderErrorKind::Flags))?;
+
+                let flags = reader
+                    .le_u32()
+                    .map_err(HeaderError::factory(HeaderErrorKind::Flags))?;
+
+                (flags, 60)
+            }
         };
 
         reader
@@ -93,6 +102,7 @@ impl Header {
 
         Ok(Self {
             format,
+            flags,
             stream_info: stream_info.into_boxed_slice(),
         })
     }

@@ -11,6 +11,7 @@ use pcm::Order;
 
 pub(crate) fn encode<R: Read, W: Write>(
     format: AudioFormat,
+    flags: u32,
     info: &StreamInfo,
     source: &mut Reader<R>,
     sink: W,
@@ -20,7 +21,13 @@ pub(crate) fn encode<R: Read, W: Write>(
             pcm::encode::<_, _, 1, 1, true>(Order::LittleEndian, info, source, sink)?;
         }
         AudioFormat::Pcm16 => {
-            pcm::encode::<_, _, 2, 2, true>(Order::LittleEndian, info, source, sink)?;
+            let order = if flags & 0x01 == 1 {
+                Order::BigEndian
+            } else {
+                Order::LittleEndian
+            };
+
+            pcm::encode::<_, _, 2, 2, true>(order, info, source, sink)?;
         }
         AudioFormat::Pcm24 => {
             pcm::encode::<_, _, 3, 3, true>(Order::LittleEndian, info, source, sink)?;

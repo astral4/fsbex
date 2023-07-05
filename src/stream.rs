@@ -5,67 +5,85 @@ use std::io::{Read, Write};
 
 pub(crate) struct LazyStream<'bank, R: Read> {
     index: u32,
-    info: &'bank StreamInfo,
     format: AudioFormat,
+    flags: u32,
+    info: &'bank StreamInfo,
     reader: &'bank mut Reader<R>,
 }
 
 impl<'bank, R: Read> LazyStream<'bank, R> {
     pub(crate) fn new(
         index: u32,
-        info: &'bank StreamInfo,
         format: AudioFormat,
+        flags: u32,
+        info: &'bank StreamInfo,
         reader: &'bank mut Reader<R>,
     ) -> Self {
         Self {
             index,
-            info,
             format,
+            flags,
+            info,
             reader,
         }
     }
 
     pub(crate) fn write<W: Write>(self, sink: W) -> Result<(), EncodeError> {
-        encode(self.format, self.info, self.reader, sink)
+        encode(self.format, self.flags, self.info, self.reader, sink)
     }
 }
 
 pub(crate) struct Stream {
     index: u32,
-    info: StreamInfo,
     format: AudioFormat,
+    flags: u32,
+    info: StreamInfo,
     data: Box<[u8]>,
 }
 
 impl Stream {
-    pub(crate) fn new(index: u32, info: StreamInfo, format: AudioFormat, data: Box<[u8]>) -> Self {
+    pub(crate) fn new(
+        index: u32,
+        format: AudioFormat,
+        flags: u32,
+        info: StreamInfo,
+        data: Box<[u8]>,
+    ) -> Self {
         Self {
             index,
-            info,
             format,
+            flags,
+            info,
             data,
         }
     }
 
     pub(crate) fn write<W: Write>(self, sink: W) -> Result<(), EncodeError> {
         let mut reader = Reader::new(&*self.data);
-        encode(self.format, &self.info, &mut reader, sink)
+        encode(self.format, self.flags, &self.info, &mut reader, sink)
     }
 }
 
 pub(crate) struct StreamIntoIter<R: Read> {
     index: u32,
-    info: Box<[StreamInfo]>,
     format: AudioFormat,
+    flags: u32,
+    info: Box<[StreamInfo]>,
     reader: Reader<R>,
 }
 
 impl<R: Read> StreamIntoIter<R> {
-    pub(crate) fn new(info: Box<[StreamInfo]>, format: AudioFormat, reader: Reader<R>) -> Self {
+    pub(crate) fn new(
+        format: AudioFormat,
+        flags: u32,
+        info: Box<[StreamInfo]>,
+        reader: Reader<R>,
+    ) -> Self {
         Self {
             index: 0,
-            info,
             format,
+            flags,
+            info,
             reader,
         }
     }
@@ -76,10 +94,9 @@ impl<R: Read> Iterator for StreamIntoIter<R> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let item = self.info.get(self.index as usize).cloned().and_then(|info| {
-            self.reader
-                .take(u32::from(info.size) as usize)
-                .ok()
-                .map(|data| Stream::new(self.index, info, self.format, data.into_boxed_slice()))
+            self.reader.take(u32::from(info.size) as usize).ok().map(|data| {
+                Stream::new(self.index, self.format, self.flags, info, data.into_boxed_slice())
+            })
         });
 
         self.index += 1;
