@@ -25,7 +25,7 @@ impl<'bank, R: Read> LazyStream<'bank, R> {
         }
     }
 
-    fn write<W: Write>(self, sink: W) -> Result<(), EncodeError> {
+    pub(crate) fn write<W: Write>(self, sink: W) -> Result<(), EncodeError> {
         encode(self.format, self.info, self.reader, sink)
     }
 }
@@ -47,7 +47,7 @@ impl Stream {
         }
     }
 
-    fn write<W: Write>(self, sink: W) -> Result<(), EncodeError> {
+    pub(crate) fn write<W: Write>(self, sink: W) -> Result<(), EncodeError> {
         let mut reader = Reader::new(&*self.data);
         encode(self.format, &self.info, &mut reader, sink)
     }

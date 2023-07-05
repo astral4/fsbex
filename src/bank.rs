@@ -19,13 +19,13 @@ impl<R: Read> Bank<R> {
         Ok(Self { header, read })
     }
 
-    fn process_streams<F, E>(mut self, f: F) -> Result<(), ProcessError<E>>
+    fn process_streams<F, E>(mut self, f: F) -> Result<(), (E, u32)>
     where
         F: Fn(LazyStream<'_, R>) -> Result<(), E>,
     {
         for (info, index) in self.header.stream_info.iter().zip(0..) {
             f(LazyStream::new(index, info, self.header.format, &mut self.read))
-                .map_err(|e| ProcessError::new(index, e))?;
+                .map_err(|e| (e, index))?;
         }
         Ok(())
     }
@@ -68,29 +68,5 @@ impl Display for DecodeError {
 impl Error for DecodeError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         self.inner.source()
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct ProcessError<E> {
-    index: u32,
-    source: E,
-}
-
-impl<E> ProcessError<E> {
-    pub(crate) fn new(index: u32, source: E) -> Self {
-        Self { index, source }
-    }
-}
-
-impl<E> Display for ProcessError<E> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        f.write_str(&format!("failed to process stream at index {}", self.index))
-    }
-}
-
-impl<E: 'static + Error> Error for ProcessError<E> {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        Some(&self.source)
     }
 }
