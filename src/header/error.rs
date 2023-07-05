@@ -25,7 +25,7 @@ pub(crate) enum HeaderErrorKind {
     ZeroTotalStreamSize,
     AudioFormat,
     UnknownAudioFormat { flag: u32 },
-    Flags,
+    EncodingFlags,
     Metadata,
     StreamHeader,
     ZeroStreamSize { index: u32 },
@@ -99,7 +99,7 @@ impl Display for HeaderError {
             UnknownAudioFormat { flag } => {
                 f.write_str(&format!("audio format flag was not recognized (0x{flag:08x})"))
             }
-            Flags => f.write_str("failed to read encoding flags"),
+            EncodingFlags => f.write_str("failed to read encoding flags"),
             Metadata => f.write_str("failed to read (unused) metadata bytes"),
             StreamHeader => f.write_str("failed to parse stream header"),
             ZeroStreamSize { index } => f.write_str(&format!("size of data of stream at index {index} was 0 bytes")),

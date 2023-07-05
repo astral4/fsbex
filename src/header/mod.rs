@@ -60,11 +60,13 @@ impl Header {
         let (flags, base_header_size) = match version {
             Version::V0 => (0, 64),
             Version::V1 => {
-                reader.skip(4).map_err(HeaderError::factory(HeaderErrorKind::Flags))?;
+                reader
+                    .skip(4)
+                    .map_err(HeaderError::factory(HeaderErrorKind::EncodingFlags))?;
 
                 let flags = reader
                     .le_u32()
-                    .map_err(HeaderError::factory(HeaderErrorKind::Flags))?;
+                    .map_err(HeaderError::factory(HeaderErrorKind::EncodingFlags))?;
 
                 (flags, 60)
             }
@@ -630,8 +632,29 @@ mod test {
         assert!(
             Header::parse(&mut reader).is_err_and(|e| e.kind() == UnknownAudioFormat { flag: 0 })
         );
+    }
+
+    #[test]
+    fn read_encoding_flags() {
+        let mut reader;
+
+        let data = b"FSB5\x00\x00\x00\x000000000000000000\x01\x00\x00\x00";
+        reader = Reader::new(data.as_slice());
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == Metadata));
 
         let data = b"FSB5\x01\x00\x00\x000000000000000000\x01\x00\x00\x00";
+        reader = Reader::new(data.as_slice());
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == EncodingFlags));
+
+        let data = b"FSB5\x01\x00\x00\x000000000000000000\x01\x00\x00\x00\x01";
+        reader = Reader::new(data.as_slice());
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == EncodingFlags));
+
+        let data = b"FSB5\x01\x00\x00\x000000000000000000\x01\x00\x00\x0000000";
+        reader = Reader::new(data.as_slice());
+        assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == EncodingFlags));
+
+        let data = b"FSB5\x01\x00\x00\x000000000000000000\x01\x00\x00\x0000000000";
         reader = Reader::new(data.as_slice());
         assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == Metadata));
     }
@@ -643,7 +666,7 @@ mod test {
 
         let mut reader;
 
-        let incomplete_data = b"FSB5\x01\x00\x00\x000000000000000000\x01\x00\x00\x00\x00";
+        let incomplete_data = b"FSB5\x00\x00\x00\x000000000000000000\x01\x00\x00\x00\x00";
         reader = Reader::new(incomplete_data.as_slice());
         assert!(Header::parse(&mut reader).is_err_and(|e| e.kind() == Metadata));
 
