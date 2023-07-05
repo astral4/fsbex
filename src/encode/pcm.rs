@@ -50,6 +50,14 @@ fn write_header<W: Write, const BYTE_DEPTH: u16, const IS_INT: bool>(
     Ok(())
 }
 
+const MASK: u8 = 0b1000_0000;
+
+fn uint_to_int<const SIZE: usize>(bytes: [u8; SIZE]) -> [u8; SIZE] {
+    let mut bytes = bytes;
+    bytes[SIZE - 1] ^= MASK;
+    bytes
+}
+
 #[derive(Debug)]
 pub(crate) struct PcmError {
     kind: PcmErrorKind,
@@ -78,5 +86,71 @@ impl Display for PcmError {
 impl Error for PcmError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         Some(&self.source)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::uint_to_int;
+
+    #[test]
+    fn convert_uint_to_int() {
+        const U8_MIDDLE: u8 = u8::MAX / 2 + 1;
+        const U16_MIDDLE: u16 = u16::MAX / 2 + 1;
+        const U32_MIDDLE: u32 = u32::MAX / 2 + 1;
+
+        // u8 + i8 values
+
+        let before = u8::MAX;
+        let after = u8::from_le_bytes(uint_to_int(before.to_le_bytes()));
+        assert_eq!(i64::from(after), i64::from(before) - i64::from(U8_MIDDLE));
+
+        let before = u8::MIN;
+        let after = i8::from_le_bytes(uint_to_int(before.to_le_bytes()));
+        assert_eq!(i64::from(after), i64::from(before) - i64::from(U8_MIDDLE));
+
+        let before = 193u8;
+        let after = u8::from_le_bytes(uint_to_int(before.to_le_bytes()));
+        assert_eq!(i64::from(after), i64::from(before) - i64::from(U8_MIDDLE));
+
+        let before = 42u8;
+        let after = i8::from_le_bytes(uint_to_int(before.to_le_bytes()));
+        assert_eq!(i64::from(after), i64::from(before) - i64::from(U8_MIDDLE));
+
+        // u16 + i16 values
+
+        let before = u16::MAX;
+        let after = u16::from_le_bytes(uint_to_int(before.to_le_bytes()));
+        assert_eq!(i64::from(after), i64::from(before) - i64::from(U16_MIDDLE));
+
+        let before = u16::MIN;
+        let after = i16::from_le_bytes(uint_to_int(before.to_le_bytes()));
+        assert_eq!(i64::from(after), i64::from(before) - i64::from(U16_MIDDLE));
+
+        let before = 44022u16;
+        let after = u16::from_le_bytes(uint_to_int(before.to_le_bytes()));
+        assert_eq!(i64::from(after), i64::from(before) - i64::from(U16_MIDDLE));
+
+        let before = 1001u16;
+        let after = i16::from_le_bytes(uint_to_int(before.to_le_bytes()));
+        assert_eq!(i64::from(after), i64::from(before) - i64::from(U16_MIDDLE));
+
+        // u32 + i32 values
+
+        let before = u32::MAX;
+        let after = u32::from_le_bytes(uint_to_int(before.to_le_bytes()));
+        assert_eq!(i64::from(after), i64::from(before) - i64::from(U32_MIDDLE));
+
+        let before = u32::MIN;
+        let after = i32::from_le_bytes(uint_to_int(before.to_le_bytes()));
+        assert_eq!(i64::from(after), i64::from(before) - i64::from(U32_MIDDLE));
+
+        let before = 3_344_556_677u32;
+        let after = u32::from_le_bytes(uint_to_int(before.to_le_bytes()));
+        assert_eq!(i64::from(after), i64::from(before) - i64::from(U32_MIDDLE));
+
+        let before = 7_654_321u32;
+        let after = i32::from_le_bytes(uint_to_int(before.to_le_bytes()));
+        assert_eq!(i64::from(after), i64::from(before) - i64::from(U32_MIDDLE));
     }
 }
