@@ -1,7 +1,8 @@
 use std::{
+    cmp::min,
     error::Error,
     fmt::{Display, Formatter, Result as FmtResult},
-    io::{Error as IoError, ErrorKind, Read},
+    io::{BufRead, Error as IoError, ErrorKind, Read},
     num::NonZeroUsize,
 };
 
@@ -91,6 +92,13 @@ impl<R: Read> Reader<R> {
         self.skip(position - self.position)
     }
 
+    pub(crate) fn limit(&mut self, limit: usize) -> CappedReader<'_, R> {
+        CappedReader {
+            inner: &mut self.inner,
+            limit,
+        }
+    }
+
     pub(crate) fn u8(&mut self) -> ReadResult<u8> {
         let mut buf = [0; 1];
         Self::read_to_array(self, &mut buf)?;
@@ -119,6 +127,42 @@ impl<R: Read> Reader<R> {
         let mut buf = [0; 2];
         Self::read_to_array(self, &mut buf)?;
         Ok(i16::from_be_bytes(buf))
+    }
+}
+
+pub(crate) struct CappedReader<'reader, R: Read> {
+    inner: &'reader mut R,
+    limit: usize,
+}
+
+impl<'reader, R: Read> Read for CappedReader<'reader, R> {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize, IoError> {
+        if self.limit == 0 {
+            return Ok(0);
+        }
+
+        let max = min(buf.len(), self.limit);
+        let n = self.inner.read(&mut buf[..max])?;
+        self.limit -= n;
+        Ok(n)
+    }
+}
+
+impl<'reader, R: BufRead> BufRead for CappedReader<'reader, R> {
+    fn fill_buf(&mut self) -> Result<&[u8], IoError> {
+        if self.limit == 0 {
+            return Ok(&[]);
+        }
+
+        let buf = self.inner.fill_buf()?;
+        let cap = min(buf.len(), self.limit);
+        Ok(&buf[..cap])
+    }
+
+    fn consume(&mut self, amt: usize) {
+        let amt = min(amt, self.limit);
+        self.limit -= amt;
+        self.inner.consume(amt);
     }
 }
 
@@ -386,5 +430,21 @@ mod test {
         let mut reader = Reader::new(UnsupportedReader);
 
         assert!(reader.unit().is_err_and(|e| e.is_kind(ReadErrorKind::Failure)));
+    }
+
+    #[test]
+    fn capped_reader_works() {
+        let data = b"abcd1234";
+        let mut reader = Reader::new(data.as_slice());
+        let mut reader = reader.limit(6);
+
+        assert!(reader.read_exact(&mut []).is_ok());
+        assert!(reader.read_exact(&mut [0]).is_ok());
+        assert!(reader.read_exact(&mut [0, 0]).is_ok());
+        assert!(reader.read_exact(&mut [0, 0, 0]).is_ok());
+        assert!(reader.read_exact(&mut []).is_ok());
+        assert!(reader
+            .read_exact(&mut [0])
+            .is_err_and(|e| e.kind() == ErrorKind::UnexpectedEof));
     }
 }
