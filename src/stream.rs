@@ -1,4 +1,4 @@
-use crate::encode::{encode, error::EncodeError};
+use crate::encode::{encode, EncodeError};
 use crate::header::{AudioFormat, StreamInfo};
 use crate::read::Reader;
 use std::io::{Read, Write};

@@ -2,11 +2,12 @@ use crate::header::{AudioFormat, StreamInfo};
 use crate::read::Reader;
 use std::io::{Read, Write};
 
-pub(crate) mod error;
+mod error;
 mod pcm;
 mod vorbis;
 mod vorbis_lookup;
 
+pub(crate) use error::EncodeError;
 use pcm::Order;
 
 pub(crate) fn encode<R: Read, W: Write>(
@@ -15,7 +16,7 @@ pub(crate) fn encode<R: Read, W: Write>(
     info: &StreamInfo,
     source: &mut Reader<R>,
     sink: W,
-) -> Result<W, error::EncodeError> {
+) -> Result<W, EncodeError> {
     Ok(match format {
         AudioFormat::Pcm8 => {
             pcm::encode::<_, _, 1, 1, true>(Order::LittleEndian, info, source, sink)?
@@ -39,6 +40,6 @@ pub(crate) fn encode<R: Read, W: Write>(
             pcm::encode::<_, _, 4, 4, false>(Order::LittleEndian, info, source, sink)?
         }
         AudioFormat::Vorbis => vorbis::encode(info, source, sink)?,
-        _ => todo!(),
+        _ => return Err(EncodeError::UnsupportedFormat { format }),
     })
 }
