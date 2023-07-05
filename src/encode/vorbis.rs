@@ -17,7 +17,7 @@ pub(super) fn encode<R: Read, W: Write>(
     info: &StreamInfo,
     source: &mut Reader<R>,
     sink: W,
-) -> Result<(), VorbisError> {
+) -> Result<W, VorbisError> {
     let crc32 = info
         .vorbis_crc32
         .ok_or_else(|| VorbisError::new(VorbisErrorKind::Crc32Lookup))?;
@@ -67,7 +67,6 @@ pub(super) fn encode<R: Read, W: Write>(
 
     encoder
         .finish()
-        .map(|_| ())
         .map_err(VorbisError::from_vorbis(VorbisErrorKind::FinishStream))
 }
 

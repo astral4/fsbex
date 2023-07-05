@@ -19,7 +19,7 @@ pub(super) fn encode<
     info: &StreamInfo,
     source: &mut Reader<R>,
     sink: W,
-) -> Result<(), PcmError> {
+) -> Result<W, PcmError> {
     debug_assert_eq!(BYTE_DEPTH as usize, BYTE_DEPTH_USIZE);
 
     let mut sink = sink;
@@ -37,7 +37,7 @@ pub(super) fn encode<
 
     if BYTE_DEPTH == 1 || (!IS_INT && order == Order::LittleEndian) {
         return copy(&mut source.limit(stream_size), &mut sink)
-            .map(|_| ())
+            .map(|_| sink)
             .map_err(PcmError::from_io(PcmErrorKind::EncodeStream));
     }
 
@@ -56,7 +56,7 @@ pub(super) fn encode<
             .map_err(PcmError::from_io(PcmErrorKind::EncodeSample))?;
     }
 
-    Ok(())
+    Ok(sink)
 }
 
 fn write_header<W: Write, const BYTE_DEPTH: u16, const IS_INT: bool>(
