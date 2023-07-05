@@ -35,7 +35,7 @@ pub(super) fn encode<
     let start_pos = source.position();
     let stream_size = u32::from(info.size) as usize;
 
-    if BYTE_DEPTH == 1 || order == Order::LittleEndian {
+    if BYTE_DEPTH == 1 || (!IS_INT && order == Order::LittleEndian) {
         return copy(&mut source.limit(stream_size), &mut sink)
             .map(|_| ())
             .map_err(PcmError::from_io(PcmErrorKind::EncodeStream));
