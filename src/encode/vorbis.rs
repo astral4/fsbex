@@ -4,7 +4,6 @@ use crate::read::{ReadError, Reader};
 use lewton::{
     audio::{read_audio_packet_generic, PreviousWindowRight},
     header::{read_header_ident, read_header_setup, IdentHeader, SetupHeader},
-    samples::Samples,
 };
 use std::{
     error::Error,

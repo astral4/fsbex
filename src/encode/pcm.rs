@@ -71,7 +71,9 @@ pub(super) fn encode<
             .map_err(PcmError::from_io(PcmErrorKind::EncodeSample))?;
     }
 
-    Ok(sink)
+    sink.flush()
+        .map(|_| sink)
+        .map_err(PcmError::from_io(PcmErrorKind::FinishStream))
 }
 
 fn write_header<W: Write, const BYTE_DEPTH: u16, const IS_INT: bool>(
@@ -131,6 +133,7 @@ enum PcmErrorKind {
     EncodeStream,
     DecodeSample,
     EncodeSample,
+    FinishStream,
 }
 
 #[derive(Debug)]
@@ -162,6 +165,7 @@ impl Display for PcmError {
             PcmErrorKind::EncodeStream => "failed to encode full PCM stream",
             PcmErrorKind::DecodeSample => "failed to decode sample from PCM stream",
             PcmErrorKind::EncodeSample => "failed to encode sample",
+            PcmErrorKind::FinishStream => "failed to finalize writing PCM stream data",
         })
     }
 }
