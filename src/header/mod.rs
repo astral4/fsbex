@@ -21,12 +21,14 @@ pub(crate) struct Header {
 
 impl Header {
     pub(crate) fn parse<R: Read>(reader: &mut Reader<R>) -> Result<Self, HeaderError> {
+        // check for file signature
         match reader.take_const() {
             Ok(data) if data == FSB5_MAGIC => Ok(()),
             Err(e) => Err(HeaderError::new_with_source(HeaderErrorKind::Magic, e)),
             _ => Err(HeaderError::new(HeaderErrorKind::Magic)),
         }?;
 
+        // determines how encoding flags are read
         let version = reader
             .le_u32()
             .map_err(HeaderError::factory(HeaderErrorKind::Version))?
@@ -57,6 +59,7 @@ impl Header {
             .map_err(HeaderError::factory(HeaderErrorKind::AudioFormat))?
             .try_into()?;
 
+        // read encoding flags
         let (flags, base_header_size) = match version {
             Version::V0 => (0, 64),
             Version::V1 => {
@@ -72,6 +75,7 @@ impl Header {
             }
         };
 
+        // skip unknown header data
         reader
             .advance_to(base_header_size)
             .map_err(HeaderError::factory(HeaderErrorKind::Metadata))?;
@@ -80,6 +84,7 @@ impl Header {
 
         let header_size = base_header_size + stream_headers_size as usize;
 
+        // make sure base header + stream headers have been read
         reader.advance_to(header_size).map_err(HeaderError::factory(
             HeaderErrorKind::WrongHeaderSize {
                 expected: header_size,
@@ -87,8 +92,14 @@ impl Header {
             },
         ))?;
 
+        // Read stream names, if present.
+        // The name table has two parts: name offsets, then names (stored as null-terminated strings).
+        // Differences in consecutive offsets are calculated to get the actual name lengths:
+        // for example, if the first name offset is 0 and the second name offset is 12,
+        // then the first name's length (including the null terminator) is 12 - 0 = 12.
+        // The final name offset is subtracted from the name table size to get the final name's length.
         if name_table_size != 0 {
-            let mut name_offsets = Vec::with_capacity(u32::from(num_streams) as usize);
+            let mut name_offsets = Vec::with_capacity(u32::from(num_streams) as usize + 1);
 
             for index in 0..num_streams.into() {
                 let offset = reader
@@ -188,6 +199,9 @@ fn parse_stream_headers<R: Read>(
     let mut stream_offsets = Vec::with_capacity(num_streams_usize + 1);
 
     for index in 0..num_streams.into() {
+        // Stream headers contain information such as sample rate (Hz) and number of channels.
+        // They can also contain metadata chunks useful for decoding and encoding stream data.
+        // Sometimes, flags for header fields are set to 0 while the actual values are stored in chunks.
         let mut stream_header = match reader.le_u64() {
             Ok(n) => RawStreamHeader::from(n).parse(index),
             Err(e) => Err(StreamError::new_with_source(index, StreamErrorKind::StreamInfo, e)),
@@ -202,6 +216,9 @@ fn parse_stream_headers<R: Read>(
         stream_headers.push(stream_header);
     }
     stream_offsets.push(total_stream_size.into());
+
+    // Only stream offsets are stored in stream headers, so they are processed to get stream lengths.
+    // Stream lengths are calculated the same way as name lengths in the name table.
 
     let mut stream_info = Vec::with_capacity(num_streams_usize);
 
@@ -282,6 +299,8 @@ impl RawStreamHeader {
             .try_into()
             .map_err(|_| StreamError::new(stream_index, StreamErrorKind::ZeroSamples))?;
 
+        // Some information (e.g. playback loops) are read from stream header chunks,
+        // which happens after parsing the stream header, so their values are set to None for now.
         Ok(StreamHeader {
             has_chunks: self.has_chunks(),
             sample_rate,
@@ -338,6 +357,8 @@ fn parse_stream_chunks<R: Read>(
                 stream.stream_loop = Some(Loop::parse(index, start, end)?);
             }
             DspCoefficients => {
+                // used for decoding and encoding GC ADPCM streams
+
                 let channels = u8::from(stream.channels);
 
                 let mut dsp_coeffs = Vec::with_capacity(channels as usize);
@@ -361,6 +382,11 @@ fn parse_stream_chunks<R: Read>(
                 stream.dsp_coeffs = Some(dsp_coeffs.into_boxed_slice());
             }
             VorbisSeekTable => {
+                // Vorbis is a variable bitrate codec, so seek tables are used to seek to specific times.
+                // This chunk starts with the CRC32 checksum of a Vorbis setup header.
+                // When encoding this stream, the checksum is used to recover the original setup header.
+                // The seek table is discarded because it isn't useful for stream decoding or encoding.
+
                 let crc32 = reader
                     .le_u32()
                     .map_err(ChunkError::factory(index, ChunkErrorKind::VorbisCrc32))?;
@@ -368,6 +394,9 @@ fn parse_stream_chunks<R: Read>(
                 stream.vorbis_crc32 = Some(crc32);
             }
             VorbisIntraLayers => {
+                // Some Vorbis stream data is stored as multiple "layers" per channel.
+                // For decoding and encoding purposes, layers simply mean that more channels are present.
+
                 let layers = reader
                     .le_u32()
                     .map_err(ChunkError::factory(index, ChunkErrorKind::VorbisLayerCount))?;
@@ -383,6 +412,7 @@ fn parse_stream_chunks<R: Read>(
             _ => {}
         }
 
+        // make sure the entire chunk has been read before continuing
         reader
             .advance_to(start_position + chunk.size as usize)
             .map_err(ChunkError::factory(
@@ -488,6 +518,7 @@ pub(crate) struct StreamInfo {
 
 impl StreamHeader {
     fn with_stream_size(self, size: NonZeroU32) -> StreamInfo {
+        // The stream name is read from the name table (if it exists), so its value is set to None for now.
         StreamInfo {
             sample_rate: self.sample_rate,
             channels: self.channels,

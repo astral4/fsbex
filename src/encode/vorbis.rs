@@ -18,10 +18,13 @@ pub(super) fn encode<R: Read, W: Write>(
     source: &mut Reader<R>,
     sink: W,
 ) -> Result<W, VorbisError> {
+    // The stream should have contained the CRC32 of a setup header in a header chunk.
+    // Otherwise, the stream cannot be encoded correctly.
     let crc32 = info
         .vorbis_crc32
         .ok_or_else(|| VorbisError::new(VorbisErrorKind::Crc32Lookup))?;
 
+    // construct headers needed for decoding packets from stream data
     let (id_header, setup_header) =
         init_headers(info.sample_rate.into(), info.channels.into(), crc32)?;
 
@@ -47,6 +50,7 @@ pub(super) fn encode<R: Read, W: Write>(
             .le_u16()
             .map_err(VorbisError::from_read(VorbisErrorKind::ReadPacket))?;
 
+        // signals end of stream data
         if packet_size == u16::MIN || packet_size == u16::MAX {
             break;
         }
@@ -55,13 +59,13 @@ pub(super) fn encode<R: Read, W: Write>(
             .take(packet_size as usize)
             .map_err(VorbisError::from_read(VorbisErrorKind::ReadPacket))?;
 
-        let block: Block =
+        let block: Vec<Vec<f32>> =
             read_audio_packet_generic(&id_header, &setup_header, packet.as_slice(), &mut window)
                 .map_err(Into::into)
                 .map_err(VorbisError::from_lewton(VorbisErrorKind::DecodePacket))?;
 
         encoder
-            .encode_audio_block(block.0)
+            .encode_audio_block(block)
             .map_err(VorbisError::from_vorbis(VorbisErrorKind::EncodeBlock))?;
     }
 
@@ -70,6 +74,7 @@ pub(super) fn encode<R: Read, W: Write>(
         .map_err(VorbisError::from_vorbis(VorbisErrorKind::FinishStream))
 }
 
+// default blocksize values for FMOD sound banks are 256 and 2048
 const MIN_BLOCK_SIZE_EXP2: u8 = 8;
 const MAX_BLOCK_SIZE_EXP2: u8 = 11;
 
@@ -78,6 +83,7 @@ fn init_headers(
     channels: u8,
     crc32: u32,
 ) -> Result<(IdentHeader, SetupHeader), VorbisError> {
+    // construct identification header from scratch
     let id_header_data = init_id_header_data(sample_rate, channels)
         .expect("writing to an in-memory buffer is infallible");
 
@@ -85,6 +91,7 @@ fn init_headers(
         .map_err(Into::into)
         .map_err(VorbisError::from_lewton(VorbisErrorKind::CreateHeaders))?;
 
+    // construct setup header from lookup table
     let setup_header_data = *VORBIS_LOOKUP
         .get(&crc32)
         .ok_or_else(|| VorbisError::new(VorbisErrorKind::Crc32Lookup))?;
@@ -101,6 +108,9 @@ fn init_headers(
 }
 
 fn init_id_header_data(sample_rate: u32, channels: u8) -> Result<Vec<u8>, IoError> {
+    // Vorbis file header information taken from:
+    // [1]: https://www.xiph.org/vorbis/doc/Vorbis_I_spec.html (sections 4.1.1 and 4.1.2)
+
     const BLOCK_SIZES: u8 = (MAX_BLOCK_SIZE_EXP2 << 4) | (MIN_BLOCK_SIZE_EXP2);
 
     let mut data = Vec::with_capacity(30);
@@ -117,26 +127,6 @@ fn init_id_header_data(sample_rate: u32, channels: u8) -> Result<Vec<u8>, IoErro
     data.write_all(&[1])?;
 
     Ok(data)
-}
-
-struct Block(Vec<Vec<f32>>);
-
-impl Samples for Block {
-    fn from_floats(floats: Vec<Vec<f32>>) -> Self {
-        Self(floats)
-    }
-
-    fn num_samples(&self) -> usize {
-        self.0[0].len()
-    }
-
-    fn truncate(&mut self, limit: usize) {
-        for channel in &mut self.0 {
-            if limit < channel.len() {
-                channel.truncate(limit);
-            }
-        }
-    }
 }
 
 #[derive(Debug)]

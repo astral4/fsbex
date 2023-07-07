@@ -17,11 +17,14 @@ pub(crate) fn encode<R: Read, W: Write>(
     source: &mut Reader<R>,
     sink: W,
 ) -> Result<W, EncodeError> {
+    // method of determining sample endianness for PCM24, PCM32, and PCMFLOAT is currently unknown
     Ok(match format {
         AudioFormat::Pcm8 => {
+            // endianness doesn't matter when samples are 1 byte wide
             pcm::encode::<_, _, 1, 1, true>(Order::LittleEndian, info, source, sink)?
         }
         AudioFormat::Pcm16 => {
+            // determine sample endianness from flags in file header
             let order = if flags & 0x01 == 1 {
                 Order::BigEndian
             } else {

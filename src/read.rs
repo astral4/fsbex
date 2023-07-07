@@ -33,6 +33,7 @@ impl<R: Read> Reader<R> {
                 }
             }
             Err(e) => match e.kind() {
+                // this I/O error is non-fatal, so reading is retried
                 ErrorKind::Interrupted => self.read_to_array(buf),
                 ErrorKind::UnexpectedEof => {
                     Err(self.to_error(ReadErrorKind::Incomplete(Needed::Unknown)))
@@ -58,6 +59,7 @@ impl<R: Read> Reader<R> {
                 }
             }
             Err(e) => match e.kind() {
+                // this I/O error is non-fatal, so reading is retried
                 ErrorKind::Interrupted => self.read_to_slice(buf),
                 ErrorKind::UnexpectedEof => {
                     Err(self.to_error(ReadErrorKind::Incomplete(Needed::Unknown)))
@@ -92,6 +94,7 @@ impl<R: Read> Reader<R> {
         self.skip(position - self.position)
     }
 
+    // `std::io::Take` isn't used here because constructing it requires taking ownership of the reader
     pub(crate) fn limit(&mut self, limit: usize) -> CappedReader<'_, R> {
         CappedReader {
             inner: &mut self.inner,
@@ -130,6 +133,7 @@ impl<R: Read> Reader<R> {
     }
 }
 
+// essentially `std::io::Take` but with a mutable reference to a reader instead of owning it
 pub(crate) struct CappedReader<'reader, R: Read> {
     inner: &'reader mut R,
     limit: usize,

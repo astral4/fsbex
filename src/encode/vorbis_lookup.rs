@@ -1,3 +1,7 @@
+//! This file contains Vorbis setup headers used to construct a lookup table at compile time.
+//! A Vorbis stream header should contain the CRC32 checksum of a setup header.
+//! The lookup table is used to correctly encode the stream.
+
 use phf::{phf_map, Map};
 
 const FVS_A72297FF: [u8; 5824] = [

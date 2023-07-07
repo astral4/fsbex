@@ -20,10 +20,14 @@ pub(super) fn encode<
     source: &mut Reader<R>,
     sink: W,
 ) -> Result<W, PcmError> {
+    // The byte depth value can't be cast to other types, so there are two const generic parameters for it.
+    // This will no longer be necessary when the generic_const_exprs feature is stabilized.
+    // The tracking issue is at https://github.com/rust-lang/rust/issues/76560.
     debug_assert_eq!(BYTE_DEPTH as usize, BYTE_DEPTH_USIZE);
 
     let mut sink = sink;
 
+    // write the WAVE file header
     write_header::<_, BYTE_DEPTH, IS_INT>(
         info.size.into(),
         u16::from(u8::from(info.channels)),
@@ -35,7 +39,13 @@ pub(super) fn encode<
     let start_pos = source.position();
     let stream_size = u32::from(info.size) as usize;
 
+    // Stream samples are encoded as little-endian and, for the int format, signed ints.
+    // However, 1) samples can be stored as big-endian, and 2) int samples are stored as unsigned ints.
+    // When this happens, the samples have to be converted. Otherwise (i.e. for little-endian float samples),
+    // the stream data can be directly copied from reader to writer.
+
     if !IS_INT && order == Order::LittleEndian {
+        // There could be more data after the stream, so a limit is placed on the number of bytes read.
         return copy(&mut source.limit(stream_size), &mut sink)
             .map(|_| sink)
             .map_err(PcmError::from_io(PcmErrorKind::EncodeStream));
@@ -46,11 +56,14 @@ pub(super) fn encode<
             .take_const::<BYTE_DEPTH_USIZE>()
             .map_err(PcmError::from_read(PcmErrorKind::DecodeSample))?;
 
+        // endianness doesn't matter when samples are 1 byte wide
         if BYTE_DEPTH != 1 && order == Order::BigEndian {
             sample.reverse();
         }
 
         if IS_INT {
+            // Samples are converted from unsigned to signed int values by shifting down.
+            // For example, u8::MAX becomes i8::MAX and 25u8 becomes -103i8.
             sample = uint_to_int(sample);
         }
 
@@ -67,6 +80,10 @@ fn write_header<W: Write, const BYTE_DEPTH: u16, const IS_INT: bool>(
     sample_rate: u32,
     sink: &mut W,
 ) -> Result<(), IoError> {
+    // WAVE file header information taken from:
+    // [1]: https://www-mmsp.ece.mcgill.ca/Documents/AudioFormats/WAVE/WAVE.html
+    // [2]: http://soundfile.sapp.org/doc/WaveFormat/
+
     sink.write_all(b"RIFF")?;
     sink.write_all((file_size - 8).to_le_bytes().as_slice())?;
     sink.write_all(b"WAVE")?;
@@ -94,9 +111,9 @@ pub(super) enum Order {
     BigEndian,
 }
 
-const MASK: u8 = 0b1000_0000;
+const fn uint_to_int<const SIZE: usize>(bytes: [u8; SIZE]) -> [u8; SIZE] {
+    const MASK: u8 = 0b1000_0000;
 
-fn uint_to_int<const SIZE: usize>(bytes: [u8; SIZE]) -> [u8; SIZE] {
     let mut bytes = bytes;
     bytes[SIZE - 1] ^= MASK;
     bytes
