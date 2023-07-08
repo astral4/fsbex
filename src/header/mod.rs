@@ -514,8 +514,9 @@ impl RawStreamChunk {
     }
 }
 
+/// Loop information associated with a stream.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct Loop {
+pub struct Loop {
     start: u32,
     len: NonZeroU32,
 }
@@ -526,6 +527,28 @@ impl Loop {
             .ok_or_else(|| ChunkError::new(index, ChunkErrorKind::ZeroLengthLoop))?;
 
         Ok(Self { start, len })
+    }
+
+    /// Returns the starting position of the loop.
+    /// This value refers to the offset, in bytes, from the start of the stream data.
+    #[must_use]
+    pub fn start(&self) -> u32 {
+        self.start
+    }
+
+    /// Returns the ending position of the loop.
+    /// This value refers to the offset, in bytes, from the start of the stream data.
+    #[must_use]
+    pub fn end(&self) -> NonZeroU32 {
+        (self.start + u32::from(self.len))
+            .try_into()
+            .expect("the sum of u32 and NonZeroU32 must be NonZeroU32")
+    }
+
+    /// Returns the length of the loop, in bytes.
+    #[must_use]
+    pub fn len(&self) -> NonZeroU32 {
+        self.len
     }
 }
 

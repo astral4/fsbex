@@ -138,7 +138,7 @@ pub struct VorbisError {
 }
 
 /// A variant of a [`VorbisError`].
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum VorbisErrorKind {
     /// A CRC32 checksum was not found in the stream header within the sound bank.
     /// This checksum is needed to reconstruct the Vorbis decoder state and encode audio samples.
@@ -172,24 +172,30 @@ impl VorbisError {
     }
 
     fn from_vorbis(kind: VorbisErrorKind) -> impl FnOnce(vorbis_rs::VorbisError) -> Self {
-        |source| Self {
+        move |source| Self {
             kind,
             source: Some(VorbisErrorSource::Encode(source)),
         }
     }
 
     fn from_lewton(kind: VorbisErrorKind) -> impl FnOnce(lewton::VorbisError) -> Self {
-        |source| Self {
+        move |source| Self {
             kind,
             source: Some(VorbisErrorSource::Decode(source)),
         }
     }
 
     fn from_read(kind: VorbisErrorKind) -> impl FnOnce(ReadError) -> Self {
-        |source| Self {
+        move |source| Self {
             kind,
             source: Some(VorbisErrorSource::Read(source)),
         }
+    }
+
+    /// Returns the [`VorbisErrorKind`] associated with this error.
+    #[must_use]
+    pub fn kind(&self) -> VorbisErrorKind {
+        self.kind
     }
 }
 

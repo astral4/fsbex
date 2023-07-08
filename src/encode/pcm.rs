@@ -131,7 +131,7 @@ pub struct PcmError {
 }
 
 /// A variant of a [`PcmError`].
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum PcmErrorKind {
     /// Failed to write the file header due to an underlying I/O error.
     CreateHeader,
@@ -153,17 +153,23 @@ enum PcmErrorSource {
 
 impl PcmError {
     fn from_io(kind: PcmErrorKind) -> impl FnOnce(IoError) -> Self {
-        |source| Self {
+        move |source| Self {
             kind,
             source: PcmErrorSource::Io(source),
         }
     }
 
     fn from_read(kind: PcmErrorKind) -> impl FnOnce(ReadError) -> Self {
-        |source| Self {
+        move |source| Self {
             kind,
             source: PcmErrorSource::Read(source),
         }
+    }
+
+    /// Returns the [`PcmErrorKind`] associated with this error.
+    #[must_use]
+    pub fn kind(&self) -> PcmErrorKind {
+        self.kind
     }
 }
 

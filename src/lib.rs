@@ -35,5 +35,5 @@ mod read;
 mod stream;
 
 pub use bank::{Bank, DecodeError, LazyStreamError};
-pub use header::AudioFormat;
+pub use header::{AudioFormat, Loop};
 pub use stream::{LazyStream, Stream, StreamIntoIter};

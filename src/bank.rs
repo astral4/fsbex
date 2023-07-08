@@ -1,10 +1,11 @@
-use crate::header::{error::HeaderError, Header};
+use crate::header::{error::HeaderError, AudioFormat, Header};
 use crate::read::{ReadError, Reader};
 use crate::stream::{LazyStream, Stream, StreamIntoIter};
 use std::{
     error::Error,
     fmt::{Display, Formatter, Result as FmtResult},
     io::Read,
+    num::NonZeroU32,
 };
 
 /// An FMOD sound bank.
@@ -68,6 +69,24 @@ impl<R: Read> Bank<R> {
         let mut read = Reader::new(source);
         let header = Header::parse(&mut read)?;
         Ok(Self { header, read })
+    }
+
+    /// Returns the audio format of streams in the sound bank.
+    ///
+    /// See [`AudioFormat`] for the list of known formats.
+    #[must_use]
+    pub fn format(&self) -> AudioFormat {
+        self.header.format
+    }
+
+    /// Returns the number of streams in the sound bank.
+    #[must_use]
+    pub fn num_streams(&self) -> NonZeroU32 {
+        let count = self.header.stream_info.len();
+        u32::try_from(count)
+            .expect("stream count was already validated to be NonZeroU32")
+            .try_into()
+            .expect("stream count was already validated to be NonZeroU32")
     }
 
     /// Sequentially reads streams from the sound bank, consuming this [`Bank<R>`].

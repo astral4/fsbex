@@ -1,7 +1,10 @@
 use crate::encode::{encode, EncodeError};
-use crate::header::{AudioFormat, StreamInfo};
+use crate::header::{AudioFormat, Loop, StreamInfo};
 use crate::read::Reader;
-use std::io::{Read, Write};
+use std::{
+    io::{Read, Write},
+    num::{NonZeroU32, NonZeroU8},
+};
 
 /// An audio stream of data that has not been read yet.
 ///
@@ -34,6 +37,59 @@ impl<'bank, R: Read> LazyStream<'bank, R> {
             flags,
             info,
             reader,
+        }
+    }
+
+    /// Returns the index of this stream within the sound bank.
+    #[must_use]
+    pub fn index(&self) -> u32 {
+        self.index
+    }
+
+    /// Returns the audio format of this stream. The format is the same for all streams in a sound bank.
+    ///
+    /// See [`AudioFormat`] for the list of known formats.
+    #[must_use]
+    pub fn format(&self) -> AudioFormat {
+        self.format
+    }
+
+    /// Returns the sample rate (Hz) of the stream.
+    #[must_use]
+    pub fn sample_rate(&self) -> NonZeroU32 {
+        self.info.sample_rate
+    }
+
+    /// Returns the number of channels in the stream.
+    #[must_use]
+    pub fn channels(&self) -> NonZeroU8 {
+        self.info.channels
+    }
+
+    /// Returns the number of samples in the stream.
+    #[must_use]
+    pub fn sample_count(&self) -> NonZeroU32 {
+        self.info.num_samples
+    }
+
+    /// Returns loop information, if it exists.
+    #[must_use]
+    pub fn loop_info(&self) -> Option<Loop> {
+        self.info.stream_loop
+    }
+
+    /// Returns the size of the stream, in bytes.
+    #[must_use]
+    pub fn size(&self) -> NonZeroU32 {
+        self.info.size
+    }
+
+    /// Returns the name of the stream, if it exists.
+    #[must_use]
+    pub fn name(&self) -> Option<&str> {
+        match &self.info.name {
+            Some(name) => Some(name),
+            None => None,
         }
     }
 
@@ -79,6 +135,59 @@ impl Stream {
             flags,
             info,
             data,
+        }
+    }
+
+    /// Returns the index of this stream within the sound bank.
+    #[must_use]
+    pub fn index(&self) -> u32 {
+        self.index
+    }
+
+    /// Returns the audio format of this stream. The format is the same for all streams in a sound bank.
+    ///
+    /// See [`AudioFormat`] for the list of known formats.
+    #[must_use]
+    pub fn format(&self) -> AudioFormat {
+        self.format
+    }
+
+    /// Returns the sample rate (Hz) of the stream.
+    #[must_use]
+    pub fn sample_rate(&self) -> NonZeroU32 {
+        self.info.sample_rate
+    }
+
+    /// Returns the number of channels in the stream.
+    #[must_use]
+    pub fn channels(&self) -> NonZeroU8 {
+        self.info.channels
+    }
+
+    /// Returns the number of samples in the stream.
+    #[must_use]
+    pub fn sample_count(&self) -> NonZeroU32 {
+        self.info.num_samples
+    }
+
+    /// Returns loop information, if it exists.
+    #[must_use]
+    pub fn loop_info(&self) -> Option<Loop> {
+        self.info.stream_loop
+    }
+
+    /// Returns the size of the stream, in bytes.
+    #[must_use]
+    pub fn size(&self) -> NonZeroU32 {
+        self.info.size
+    }
+
+    /// Returns the name of the stream, if it exists.
+    #[must_use]
+    pub fn name(&self) -> Option<&str> {
+        match &self.info.name {
+            Some(name) => Some(name),
+            None => None,
         }
     }
 
