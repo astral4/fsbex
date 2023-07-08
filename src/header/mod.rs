@@ -56,8 +56,8 @@ impl Header {
 
         let format = reader
             .le_u32()
-            .map_err(HeaderError::factory(HeaderErrorKind::AudioFormat))?
-            .try_into()?;
+            .map_err(HeaderError::factory(HeaderErrorKind::AudioFormat))
+            .and_then(AudioFormat::parse)?;
 
         // read encoding flags
         let (flags, base_header_size) = match version {
@@ -188,10 +188,8 @@ pub enum AudioFormat {
     Opus,
 }
 
-impl TryFrom<u32> for AudioFormat {
-    type Error = HeaderError;
-
-    fn try_from(value: u32) -> Result<Self, Self::Error> {
+impl AudioFormat {
+    fn parse(value: u32) -> Result<Self, HeaderError> {
         match value {
             1 => Ok(Self::Pcm8),
             2 => Ok(Self::Pcm16),
