@@ -140,24 +140,51 @@ impl TryFrom<u32> for Version {
     }
 }
 
+/// Represents known audio formats of streams within a sound bank.
 #[derive(Clone, Copy, Debug)]
-pub(crate) enum AudioFormat {
+pub enum AudioFormat {
+    /// PCM 8-bit with samples stored as unsigned integers.
     Pcm8,
+    /// PCM 16-bit with samples stored as unsigned integers.
     Pcm16,
+    /// PCM 24-bit with samples stored as unsigned integers.
     Pcm24,
+    /// PCM 32-bit with samples stored as unsigned integers.
     Pcm32,
+    /// PCM 32-bit with samples stored as IEEE 754 floating-point numbers.
     PcmFloat,
+    /// GC ADPCM, used in games for the GameCube, Wii and Wii U.
     GcAdpcm,
+    /// IMA ADPCM, developed by the
+    /// [Interactive Multimedia Association](https://en.wikipedia.org/wiki/Interactive_Multimedia_Association).
     ImaAdpcm,
+    /// VAG, an ADPCM format used in games for the PS1, PS2, and PSP.
     Vag,
+    /// HEVAG, an ADPCM format used in games for the PS Vita and PS4.
+    /// HEVAG is an improved version of VAG that is compatible with the original format.
     HeVag,
+    /// XMA, used in games for the Xbox 360.
+    /// XMA is based on the Windows Media format (WMA).
     Xma,
+    /// MPEG, an audiovisual format developed by the
+    /// [ISO/IEC Moving Picture Experts Group](https://en.wikipedia.org/wiki/Moving_Picture_Experts_Group).
     Mpeg,
+    /// CELT, developed by the [Xiph.Org Foundation](https://en.wikipedia.org/wiki/Xiph.Org_Foundation).
+    /// The CELT format is obsolete, and its functionality has been merged into Opus.
     Celt,
+    /// ATRAC9, used in PlayStation games and debuting with the PS Vita.
+    /// ATRAC9 is part of the ATRAC family of audio formats.
     Atrac9,
+    /// xWMA, used in games for Windows and Xbox systems.
+    /// xWMA is similar to the WAVE and XMA formats.
     Xwma,
+    /// Vorbis, developed by the [Xiph.Org Foundation](https://en.wikipedia.org/wiki/Xiph.Org_Foundation).
+    /// Vorbis is a common music format in mobile and low-spec games.
     Vorbis,
+    /// FADPCM, an ADPCM format developed by Firelight Technologies for use with FMOD.
     FAdpcm,
+    /// Opus, developed by the [Xiph.Org Foundation](https://en.wikipedia.org/wiki/Xiph.Org_Foundation).
+    /// Opus is intended to replace older Xiph.Org formats such as Vorbis.
     Opus,
 }
 

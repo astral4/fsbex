@@ -21,7 +21,7 @@ pub(super) fn encode<R: Read, W: Write>(
     // Otherwise, the stream cannot be encoded correctly.
     let crc32 = info
         .vorbis_crc32
-        .ok_or_else(|| VorbisError::new(VorbisErrorKind::Crc32Lookup))?;
+        .ok_or_else(|| VorbisError::new(VorbisErrorKind::MissingCrc32))?;
 
     // construct headers needed for decoding packets from stream data
     let (id_header, setup_header) =
@@ -128,21 +128,34 @@ fn init_id_header_data(sample_rate: u32, channels: u8) -> Result<Vec<u8>, IoErro
     Ok(data)
 }
 
+/// Represents an error that can occur when encoding a Vorbis stream.
+///
+/// See [`VorbisErrorKind`] for the different kinds of errors that can occur.
 #[derive(Debug)]
-pub(crate) struct VorbisError {
+pub struct VorbisError {
     kind: VorbisErrorKind,
     source: Option<VorbisErrorSource>,
 }
 
+/// A variant of a [`VorbisError`].
 #[derive(Debug)]
-enum VorbisErrorKind {
+pub enum VorbisErrorKind {
+    /// A CRC32 checksum was not found in the stream header within the sound bank.
+    /// This checksum is needed to reconstruct the Vorbis decoder state and encode audio samples.
     MissingCrc32,
+    /// Failed to create the file headers needed for the Vorbis decoder.
     CreateHeaders,
+    /// The stream's associated CRC32 checksum was found, but it did not match any existing entries in the lookup table.
     Crc32Lookup,
+    /// Failed to create the Vorbis encoder for writing audio samples.
     CreateEncoder,
+    /// Failed to read an audio packet from the stream data.
     ReadPacket,
+    /// Failed to decode an audio packet from the stream data into a sample.
     DecodePacket,
+    /// Failed to encode an audio sample to the writer.
     EncodeBlock,
+    /// Failed to flush the writer after encoding the entire stream.
     FinishStream,
 }
 

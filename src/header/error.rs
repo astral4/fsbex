@@ -7,7 +7,7 @@ use std::{
 };
 
 #[derive(Debug)]
-pub(crate) struct HeaderError {
+pub struct HeaderError {
     kind: HeaderErrorKind,
     source: Option<HeaderErrorSource>,
 }

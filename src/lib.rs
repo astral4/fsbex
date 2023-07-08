@@ -26,9 +26,14 @@
     unused_results,
     unused_tuple_struct_fields
 )]
+#![allow(clippy::module_name_repetitions)]
 
 mod bank;
-mod encode;
+pub mod encode;
 mod header;
 mod read;
 mod stream;
+
+pub use bank::{Bank, DecodeError, LazyStreamError};
+pub use header::AudioFormat;
+pub use stream::{LazyStream, Stream, StreamIntoIter};

@@ -121,18 +121,27 @@ const fn uint_to_int<const SIZE: usize>(bytes: [u8; SIZE]) -> [u8; SIZE] {
     bytes
 }
 
+/// Represents an error that can occur when encoding a PCM stream.
+///
+/// See [`PcmErrorKind`] for the different kinds of errors that can occur.
 #[derive(Debug)]
-pub(crate) struct PcmError {
+pub struct PcmError {
     kind: PcmErrorKind,
     source: PcmErrorSource,
 }
 
+/// A variant of a [`PcmError`].
 #[derive(Debug)]
-enum PcmErrorKind {
+pub enum PcmErrorKind {
+    /// Failed to write the file header due to an underlying I/O error.
     CreateHeader,
+    /// Failed to encode the entire stream via copying from reader to writer.
     EncodeStream,
+    /// Failed to decode an audio sample from the stream data.
     DecodeSample,
+    /// Failed to encode an audio sample to the writer.
     EncodeSample,
+    /// Failed to flush the writer after encoding the entire stream.
     FinishStream,
 }
 

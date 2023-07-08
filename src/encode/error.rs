@@ -7,10 +7,19 @@ use std::{
     fmt::{Display, Formatter, Result as FmtResult},
 };
 
+/// Represents an error that can occur when encoding a sound bank stream.
 #[derive(Debug)]
-pub(crate) enum EncodeError {
-    UnsupportedFormat { format: AudioFormat },
+pub enum EncodeError {
+    /// Encoding is not implemented for this audio format yet.
+    UnsupportedFormat {
+        /// The audio format of streams in the sound bank.
+        format: AudioFormat,
+    },
+    /// Failed to encode a PCM stream.
+    /// See [`PcmError`] for more information.
     Pcm(PcmError),
+    /// Failed to encode a Vorbis stream.
+    /// See [`VorbisError`] for more information.
     Vorbis(VorbisError),
 }
 

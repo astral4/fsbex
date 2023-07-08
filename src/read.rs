@@ -6,6 +6,7 @@ use std::{
     num::NonZeroUsize,
 };
 
+#[derive(Debug)]
 pub(crate) struct Reader<R: Read> {
     inner: R,
     position: usize,

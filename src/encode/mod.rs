@@ -1,3 +1,5 @@
+//! Various types associated with encoding stream data from sound banks.
+
 use crate::header::{AudioFormat, StreamInfo};
 use crate::read::Reader;
 use std::io::{Read, Write};
@@ -7,8 +9,10 @@ mod pcm;
 mod vorbis;
 mod vorbis_lookup;
 
-pub(crate) use error::EncodeError;
+pub use error::EncodeError;
 use pcm::Order;
+pub use pcm::{PcmError, PcmErrorKind};
+pub use vorbis::{VorbisError, VorbisErrorKind};
 
 pub(crate) fn encode<R: Read, W: Write>(
     format: AudioFormat,
