@@ -55,7 +55,10 @@ impl HeaderError {
     pub(crate) fn factory(kind: HeaderErrorKind) -> impl FnOnce(ReadError) -> Self {
         move |source| Self::new_with_source(kind, source)
     }
+}
 
+#[cfg(test)]
+impl HeaderError {
     pub(crate) fn kind(&self) -> HeaderErrorKind {
         self.kind
     }
@@ -161,11 +164,10 @@ impl StreamError {
             source: Some(StreamErrorSource::Read(source)),
         }
     }
+}
 
-    pub(crate) fn factory(index: u32, kind: StreamErrorKind) -> impl FnOnce(ReadError) -> Self {
-        move |source| Self::new_with_source(index, kind, source)
-    }
-
+#[cfg(test)]
+impl StreamError {
     pub(crate) fn kind(&self) -> StreamErrorKind {
         self.kind
     }
