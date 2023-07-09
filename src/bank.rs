@@ -206,7 +206,7 @@ impl<E> LazyStreamError<E> {
 
 impl<E> Display for LazyStreamError<E> {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        f.write_str(&format!("failed to process stream at index {}", self.index))
+        f.write_fmt(format_args!("failed to process stream at index {}", self.index))
     }
 }
 

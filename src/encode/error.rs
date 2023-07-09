@@ -2,7 +2,6 @@ use super::pcm::PcmError;
 use super::vorbis::VorbisError;
 use crate::header::AudioFormat;
 use std::{
-    borrow::Cow,
     error::Error,
     fmt::{Display, Formatter, Result as FmtResult},
 };
@@ -37,15 +36,13 @@ impl From<VorbisError> for EncodeError {
 
 impl Display for EncodeError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        let msg = match self {
-            Self::UnsupportedFormat { format } => {
-                Cow::Owned(format!("encoding for {format:?} streams is currently unsupported"))
-            }
-            Self::Pcm(_) => Cow::Borrowed("failed to encode PCM stream"),
-            Self::Vorbis(_) => Cow::Borrowed("failed to encode Vorbis stream"),
-        };
-
-        f.write_str(&msg)
+        match self {
+            Self::UnsupportedFormat { format } => f.write_fmt(format_args!(
+                "encoding for {format:?} streams is currently unsupported"
+            )),
+            Self::Pcm(_) => f.write_str("failed to encode PCM stream"),
+            Self::Vorbis(_) => f.write_str("failed to encode Vorbis stream"),
+        }
     }
 }
 

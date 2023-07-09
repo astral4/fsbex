@@ -225,13 +225,13 @@ impl Display for ReadError {
             ReadErrorKind::Failure => f.write_str("failed to read data due to I/O error"),
             ReadErrorKind::Incomplete(needed) => match needed {
                 Needed::Size(size) => {
-                    f.write_str(&format!("incomplete data: needed {size} more bytes to read"))
+                    f.write_fmt(format_args!("incomplete data: needed {size} more bytes to read"))
                 }
                 Needed::Unknown => f.write_str("incomplete data"),
             },
         }?;
 
-        f.write_str(&format!(" - byte position {}", self.position))
+        f.write_fmt(format_args!(" - byte position {}", self.position))
     }
 }
 

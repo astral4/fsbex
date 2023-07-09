@@ -91,7 +91,7 @@ impl Display for HeaderError {
             Magic => f.write_str("no file signature found"),
             Version => f.write_str("failed to read file format version"),
             UnknownVersion { version } => {
-                f.write_str(&format!("file format version was not recognized (0x{version:08x})"))
+                f.write_fmt(format_args!("file format version was not recognized (0x{version:08x})"))
             }
             StreamCount => f.write_str("failed to read number of streams"),
             ZeroStreams => f.write_str("number of streams was 0"),
@@ -101,14 +101,14 @@ impl Display for HeaderError {
             ZeroTotalStreamSize => f.write_str("total size of stream data was 0 bytes"),
             AudioFormat => f.write_str("failed to read audio format flag"),
             UnknownAudioFormat { flag } => {
-                f.write_str(&format!("audio format flag was not recognized (0x{flag:08x})"))
+                f.write_fmt(format_args!("audio format flag was not recognized (0x{flag:08x})"))
             }
             EncodingFlags => f.write_str("failed to read encoding flags"),
             Metadata => f.write_str("failed to read (unused) metadata bytes"),
             StreamHeader => f.write_str("failed to parse stream header"),
-            ZeroStreamSize { index } => f.write_str(&format!("size of data of stream at index {index} was 0 bytes")),
+            ZeroStreamSize { index } => f.write_fmt(format_args!("size of data of stream at index {index} was 0 bytes")),
             WrongHeaderSize { expected, actual } => {
-                f.write_str(&format!("total size of base header and stream headers ({actual} bytes) was different from expected ({expected} bytes)"))
+                f.write_fmt(format_args!("total size of base header and stream headers ({actual} bytes) was different from expected ({expected} bytes)"))
             }
             NameTable => f.write_str("failed to read stream names")
         }
@@ -192,13 +192,13 @@ impl Display for StreamError {
         match self.kind {
             StreamInfo => f.write_str("failed to read stream metadata"),
             UnknownSampleRate { flag } => {
-                f.write_str(&format!("sample rate flag was not recognized (0x{flag:02x})"))
+                f.write_fmt(format_args!("sample rate flag was not recognized (0x{flag:02x})"))
             }
             ZeroSamples => f.write_str("number of samples was 0"),
             Chunk => f.write_str("failed to parse stream header chunk"),
         }?;
 
-        f.write_str(&format!(" - stream header at index {}", self.index))
+        f.write_fmt(format_args!(" - stream header at index {}", self.index))
     }
 }
 
@@ -279,7 +279,7 @@ impl Display for ChunkError {
         match self.kind {
             Flag => f.write_str("failed to read chunk flag"),
             UnknownType { flag } => {
-                f.write_str(&format!("chunk type flag was not recognized (0x{flag:02x})"))
+                f.write_fmt(format_args!("chunk type flag was not recognized (0x{flag:02x})"))
             }
             ChannelCount => f.write_str("failed to read number of channels"),
             ZeroChannels => f.write_str("number of channels was 0"),
@@ -293,16 +293,16 @@ impl Display for ChunkError {
             VorbisLayerCount => {
                 f.write_str("failed to read number of layers per channel in Vorbis stream")
             }
-            TooManyVorbisLayers { layers } => f.write_str(&format!(
+            TooManyVorbisLayers { layers } => f.write_fmt(format_args!(
                 "number of layers in Vorbis stream was greater than 255 ({layers} layers)"
             )),
             ZeroVorbisLayers => f.write_str("number of layers in Vorbis stream was 0"),
             WrongChunkSize { expected, actual } => {
-                f.write_str(&format!("size of stream header chunk ({actual} bytes) was different from expected ({expected} bytes)"))
+                f.write_fmt(format_args!("size of stream header chunk ({actual} bytes) was different from expected ({expected} bytes)"))
             }
         }?;
 
-        f.write_str(&format!(" - stream header chunk at index {}", self.index))
+        f.write_fmt(format_args!(" - stream header chunk at index {}", self.index))
     }
 }
 
@@ -378,7 +378,7 @@ impl Display for NameError {
             Utf8 => f.write_str("stream name was not valid UTF-8"),
         }?;
 
-        f.write_str(&format!(" - stream name at index {}", self.index))
+        f.write_fmt(format_args!(" - stream name at index {}", self.index))
     }
 }
 
