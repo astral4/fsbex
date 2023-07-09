@@ -7,12 +7,13 @@ use std::{
 };
 
 #[derive(Debug)]
-pub struct HeaderError {
+pub(crate) struct HeaderError {
     kind: HeaderErrorKind,
     source: Option<HeaderErrorSource>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(Clone, Copy, PartialEq, Eq))]
 pub(crate) enum HeaderErrorKind {
     Magic,
     Version,
@@ -134,7 +135,8 @@ pub(crate) struct StreamError {
     source: Option<StreamErrorSource>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(Clone, Copy, PartialEq, Eq))]
 pub(crate) enum StreamErrorKind {
     StreamInfo,
     UnknownSampleRate { flag: u8 },
@@ -219,7 +221,8 @@ pub(crate) struct ChunkError {
     source: Option<ReadError>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(Clone, Copy, PartialEq, Eq))]
 pub(crate) enum ChunkErrorKind {
     Flag,
     UnknownType { flag: u8 },

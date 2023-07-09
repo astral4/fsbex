@@ -14,7 +14,7 @@ use std::{
 /// However, encoding for both [`LazyStream`] and [`Stream`] can fail due to I/O errors.
 ///
 /// [`Bank::read_streams`]: crate::Bank::read_streams
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct LazyStream<'bank, R: Read> {
     index: u32,
     format: AudioFormat,
@@ -112,7 +112,7 @@ impl<'bank, R: Read> LazyStream<'bank, R> {
 ///
 /// [`Bank::into_iter`]: crate::Bank::into_iter
 /// [`Bank`]: crate::Bank
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Stream {
     index: u32,
     format: AudioFormat,
@@ -208,7 +208,7 @@ impl Stream {
 /// When iterating, `Some(Stream)` is returned if a stream was successfully read from the sound bank, and `None` otherwise.
 ///
 /// [`Bank::into_iter`]: crate::Bank::into_iter
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StreamIntoIter<R: Read> {
     index: u32,
     format: AudioFormat,

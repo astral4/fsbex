@@ -45,7 +45,7 @@ use std::{
 /// [`AudioFormat`]: crate::header::AudioFormat
 /// [`File`]: std::fs::File
 /// [`Path`]: std::path::Path
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Bank<R: Read> {
     header: Header,
     read: Reader<R>,

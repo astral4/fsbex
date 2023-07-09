@@ -12,7 +12,7 @@ use std::{
     num::{NonZeroU32, NonZeroU8},
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Header {
     pub(crate) format: AudioFormat,
     pub(crate) flags: u32,
@@ -141,7 +141,7 @@ impl TryFrom<u32> for Version {
 }
 
 /// Represents known audio formats of streams within a sound bank.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AudioFormat {
     /// PCM 8-bit with samples stored as unsigned integers.
     Pcm8,
@@ -274,7 +274,8 @@ struct RawStreamHeader {
     num_samples: u30,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 struct StreamHeader {
     has_chunks: bool,
     sample_rate: NonZeroU32,
@@ -515,7 +516,7 @@ impl RawStreamChunk {
 }
 
 /// Loop information associated with a stream.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Loop {
     start: u32,
     len: NonZeroU32,
@@ -552,7 +553,7 @@ impl Loop {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct StreamInfo {
     pub(crate) sample_rate: NonZeroU32,
     pub(crate) channels: NonZeroU8,

@@ -6,7 +6,7 @@ use std::{
     num::NonZeroUsize,
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Reader<R: Read> {
     inner: R,
     position: usize,
@@ -180,13 +180,15 @@ pub(crate) struct ReadError {
     source: Option<IoError>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(Clone, Copy, PartialEq, Eq))]
 pub(crate) enum ReadErrorKind {
     Failure,
     Incomplete(Needed),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(Clone, Copy, PartialEq, Eq))]
 pub(crate) enum Needed {
     Size(NonZeroUsize),
     Unknown,

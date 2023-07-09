@@ -131,7 +131,7 @@ pub struct PcmError {
 }
 
 /// A variant of a [`PcmError`].
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PcmErrorKind {
     /// Failed to write the file header due to an underlying I/O error.
     CreateHeader,
