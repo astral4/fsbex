@@ -104,10 +104,9 @@ impl<R: Read> Bank<R> {
     where
         F: Fn(LazyStream<'_, R>) -> Result<(), E>,
     {
-        let mut next_stream_pos = 0;
-
         for (info, index) in self.header.stream_info.iter().zip(0..) {
-            next_stream_pos += u32::from(info.size) as usize;
+            let size = u32::from(info.size) as usize;
+            let start_pos = self.read.position();
 
             f(LazyStream::new(
                 index,
@@ -119,7 +118,7 @@ impl<R: Read> Bank<R> {
             .map_err(LazyStreamError::from_other(index))?;
 
             self.read
-                .advance_to(next_stream_pos)
+                .advance_to(start_pos + size)
                 .map_err(LazyStreamError::from_read(index))?;
         }
         Ok(())
@@ -217,4 +216,26 @@ impl<E: Error + 'static> Error for LazyStreamError<E> {
             LazyStreamErrorSource::Other(e) => Some(e),
         }
     }
+}
+
+#[test]
+fn it_works() {
+    use std::{fs::File, io::BufWriter};
+
+    let data = include_bytes!("../test-data/act13d0d0/m_sys_midautumn20.fsb");
+
+    Bank::new(data.as_slice())
+        .unwrap()
+        .read_streams(|stream| {
+            let out = BufWriter::new(File::create("out.ogg").unwrap());
+            stream.write(out).map(|_| ())
+        })
+        .unwrap();
+
+    println!("okayge");
+
+    Bank::new(data.as_slice()).unwrap().into_iter().for_each(|stream| {
+        let out = BufWriter::new(File::create("out.ogg").unwrap());
+        stream.write(out).map(|_| ()).unwrap();
+    });
 }
