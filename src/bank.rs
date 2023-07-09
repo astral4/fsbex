@@ -217,25 +217,3 @@ impl<E: Error + 'static> Error for LazyStreamError<E> {
         }
     }
 }
-
-#[test]
-fn it_works() {
-    use std::{fs::File, io::BufWriter};
-
-    let data = include_bytes!("../test-data/act13d0d0/m_sys_midautumn20.fsb");
-
-    Bank::new(data.as_slice())
-        .unwrap()
-        .read_streams(|stream| {
-            let out = BufWriter::new(File::create("out.ogg").unwrap());
-            stream.write(out).map(|_| ())
-        })
-        .unwrap();
-
-    println!("okayge");
-
-    Bank::new(data.as_slice()).unwrap().into_iter().for_each(|stream| {
-        let out = BufWriter::new(File::create("out.ogg").unwrap());
-        stream.write(out).map(|_| ()).unwrap();
-    });
-}
