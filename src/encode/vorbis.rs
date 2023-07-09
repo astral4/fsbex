@@ -138,7 +138,7 @@ pub struct VorbisError {
 }
 
 /// A variant of a [`VorbisError`].
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum VorbisErrorKind {
     /// A CRC32 checksum was not found in the stream header within the sound bank.
     /// This checksum is needed to reconstruct the Vorbis decoder state and encode audio samples.

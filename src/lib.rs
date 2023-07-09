@@ -6,7 +6,7 @@
 //!
 //! Parsing a sound bank, then writing streams to files:
 //!
-//! ```ignore
+//! ```no_run
 //! use fsbex::{Bank, AudioFormat};
 //! use std::{
 //!     error::Error,

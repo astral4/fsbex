@@ -141,7 +141,7 @@ impl TryFrom<u32> for Version {
 }
 
 /// Represents known audio formats of streams within a sound bank.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum AudioFormat {
     /// PCM 8-bit with samples stored as unsigned integers.
     Pcm8,
@@ -516,7 +516,7 @@ impl RawStreamChunk {
 }
 
 /// Loop information associated with a stream.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Loop {
     start: u32,
     len: NonZeroU32,
