@@ -201,6 +201,11 @@ impl<E> LazyStreamError<E> {
             source: LazyStreamErrorSource::Other(source),
         }
     }
+
+    /// Returns the index of the stream where the error occurred.
+    pub fn index(&self) -> u32 {
+        self.index
+    }
 }
 
 impl<E> Display for LazyStreamError<E> {
