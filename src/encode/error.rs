@@ -8,6 +8,7 @@ use std::{
 
 /// Represents an error that can occur when encoding a sound bank stream.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum EncodeError {
     /// Encoding is not implemented for this audio format yet.
     UnsupportedFormat {

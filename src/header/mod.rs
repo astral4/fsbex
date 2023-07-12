@@ -142,6 +142,7 @@ impl TryFrom<u32> for Version {
 
 /// Represents known audio formats of streams within a sound bank.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum AudioFormat {
     /// PCM 8-bit with samples stored as unsigned integers.
     Pcm8,
