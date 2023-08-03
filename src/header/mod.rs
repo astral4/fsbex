@@ -591,7 +591,7 @@ fn read_stream_names<R: Read>(
             .take(name_len as usize)
             .map_err(NameError::read_factory(index, NameErrorKind::Name))?;
 
-        let raw_name = CStr::from_bytes_with_nul(name_bytes.as_slice())
+        let raw_name = CStr::from_bytes_until_nul(name_bytes.as_slice())
             .map_err(NameError::cstr_factory(index))?;
 
         let name = raw_name.to_str().map_err(NameError::utf8_factory(index))?.into();

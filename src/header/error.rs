@@ -1,7 +1,7 @@
 use crate::read::ReadError;
+use core::ffi::FromBytesUntilNulError;
 use std::{
     error::Error,
-    ffi::FromBytesWithNulError,
     fmt::{Display, Formatter, Result as FmtResult},
     str::Utf8Error,
 };
@@ -332,7 +332,7 @@ pub(crate) enum NameErrorKind {
 #[derive(Debug)]
 enum NameErrorSource {
     Read(ReadError),
-    CStr(FromBytesWithNulError),
+    CStr(FromBytesUntilNulError),
     Utf8(Utf8Error),
 }
 
@@ -349,7 +349,7 @@ impl NameError {
         move |source| Self::new(index, kind, NameErrorSource::Read(source))
     }
 
-    pub(crate) fn cstr_factory(index: u32) -> impl FnOnce(FromBytesWithNulError) -> Self {
+    pub(crate) fn cstr_factory(index: u32) -> impl FnOnce(FromBytesUntilNulError) -> Self {
         move |source| Self::new(index, NameErrorKind::Name, NameErrorSource::CStr(source))
     }
 
