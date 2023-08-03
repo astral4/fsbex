@@ -39,12 +39,11 @@ pub(super) fn encode<
     let start_pos = source.position();
     let stream_size = u32::from(info.size) as usize;
 
-    // Stream samples are encoded as little-endian and, for the int format, signed ints.
-    // However, 1) samples can be stored as big-endian, and 2) int samples are stored as unsigned ints.
-    // When this happens, the samples have to be converted. Otherwise (i.e. for little-endian float samples),
-    // the stream data can be directly copied from reader to writer.
+    // Stream samples are encoded as little-endian.
+    // However, samples can be stored as big-endian; when this happens, the samples have to be converted.
+    // Otherwise, the stream data can be directly copied from reader to writer.
 
-    if !IS_INT && order == Order::LittleEndian {
+    if !IS_INT || order == Order::LittleEndian {
         // There could be more data after the stream, so a limit is placed on the number of bytes read.
         return copy(&mut source.limit(stream_size), &mut sink)
             .map(|_| sink)
@@ -56,16 +55,8 @@ pub(super) fn encode<
             .take_const::<BYTE_DEPTH_USIZE>()
             .map_err(PcmError::from_read(PcmErrorKind::DecodeSample))?;
 
-        // endianness doesn't matter when samples are 1 byte wide
-        if BYTE_DEPTH != 1 && order == Order::BigEndian {
-            sample.reverse();
-        }
-
-        if IS_INT {
-            // Samples are converted from unsigned to signed int values by shifting down.
-            // For example, u8::MAX becomes i8::MAX and 25u8 becomes -103i8.
-            sample = uint_to_int(sample);
-        }
+        // This is optimized out when BYTE_DEPTH == 1
+        sample.reverse();
 
         sink.write_all(sample.as_slice())
             .map_err(PcmError::from_io(PcmErrorKind::EncodeSample))?;
@@ -111,14 +102,6 @@ fn write_header<W: Write, const BYTE_DEPTH: u16, const IS_INT: bool>(
 pub(super) enum Order {
     LittleEndian,
     BigEndian,
-}
-
-const fn uint_to_int<const SIZE: usize>(bytes: [u8; SIZE]) -> [u8; SIZE] {
-    const MASK: u8 = 0b1000_0000;
-
-    let mut bytes = bytes;
-    bytes[SIZE - 1] ^= MASK;
-    bytes
 }
 
 /// Represents an error that can occur when encoding a PCM stream.
@@ -192,71 +175,5 @@ impl Error for PcmError {
             PcmErrorSource::Io(e) => Some(e),
             PcmErrorSource::Read(e) => Some(e),
         }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::uint_to_int;
-
-    #[test]
-    fn convert_uint_to_int() {
-        const U8_MIDDLE: u8 = u8::MAX / 2 + 1;
-        const U16_MIDDLE: u16 = u16::MAX / 2 + 1;
-        const U32_MIDDLE: u32 = u32::MAX / 2 + 1;
-
-        // u8 + i8 values
-
-        let before = u8::MAX;
-        let after = u8::from_le_bytes(uint_to_int(before.to_le_bytes()));
-        assert_eq!(i64::from(after), i64::from(before) - i64::from(U8_MIDDLE));
-
-        let before = u8::MIN;
-        let after = i8::from_le_bytes(uint_to_int(before.to_le_bytes()));
-        assert_eq!(i64::from(after), i64::from(before) - i64::from(U8_MIDDLE));
-
-        let before = 193u8;
-        let after = u8::from_le_bytes(uint_to_int(before.to_le_bytes()));
-        assert_eq!(i64::from(after), i64::from(before) - i64::from(U8_MIDDLE));
-
-        let before = 42u8;
-        let after = i8::from_le_bytes(uint_to_int(before.to_le_bytes()));
-        assert_eq!(i64::from(after), i64::from(before) - i64::from(U8_MIDDLE));
-
-        // u16 + i16 values
-
-        let before = u16::MAX;
-        let after = u16::from_le_bytes(uint_to_int(before.to_le_bytes()));
-        assert_eq!(i64::from(after), i64::from(before) - i64::from(U16_MIDDLE));
-
-        let before = u16::MIN;
-        let after = i16::from_le_bytes(uint_to_int(before.to_le_bytes()));
-        assert_eq!(i64::from(after), i64::from(before) - i64::from(U16_MIDDLE));
-
-        let before = 44022u16;
-        let after = u16::from_le_bytes(uint_to_int(before.to_le_bytes()));
-        assert_eq!(i64::from(after), i64::from(before) - i64::from(U16_MIDDLE));
-
-        let before = 1001u16;
-        let after = i16::from_le_bytes(uint_to_int(before.to_le_bytes()));
-        assert_eq!(i64::from(after), i64::from(before) - i64::from(U16_MIDDLE));
-
-        // u32 + i32 values
-
-        let before = u32::MAX;
-        let after = u32::from_le_bytes(uint_to_int(before.to_le_bytes()));
-        assert_eq!(i64::from(after), i64::from(before) - i64::from(U32_MIDDLE));
-
-        let before = u32::MIN;
-        let after = i32::from_le_bytes(uint_to_int(before.to_le_bytes()));
-        assert_eq!(i64::from(after), i64::from(before) - i64::from(U32_MIDDLE));
-
-        let before = 3_344_556_677u32;
-        let after = u32::from_le_bytes(uint_to_int(before.to_le_bytes()));
-        assert_eq!(i64::from(after), i64::from(before) - i64::from(U32_MIDDLE));
-
-        let before = 7_654_321u32;
-        let after = i32::from_le_bytes(uint_to_int(before.to_le_bytes()));
-        assert_eq!(i64::from(after), i64::from(before) - i64::from(U32_MIDDLE));
     }
 }
