@@ -10,7 +10,7 @@ use std::{
     fmt::{Display, Formatter, Result as FmtResult},
     io::{Error as IoError, Read, Write},
 };
-use vorbis_rs::{VorbisBitrateManagementStrategy, VorbisEncoder};
+use vorbis_rs::{VorbisBitrateManagementStrategy, VorbisEncoderBuilder};
 
 pub(super) fn encode<R: Read, W: Write>(
     info: &StreamInfo,
@@ -27,18 +27,19 @@ pub(super) fn encode<R: Read, W: Write>(
     let (id_header, setup_header) =
         init_headers(info.sample_rate.into(), info.channels.into(), crc32)?;
 
-    let mut encoder = VorbisEncoder::new(
-        0,
-        [("", "")],
-        info.sample_rate,
-        info.channels,
-        VorbisBitrateManagementStrategy::QualityVbr {
+    #[allow(unused_results)]
+    let mut encoder = {
+        let mut builder = VorbisEncoderBuilder::new(info.sample_rate, info.channels, sink)
+            .map_err(VorbisError::from_vorbis(VorbisErrorKind::CreateEncoder))?;
+
+        builder.bitrate_management_strategy(VorbisBitrateManagementStrategy::QualityVbr {
             target_quality: 1.0,
-        },
-        None,
-        sink,
-    )
-    .map_err(VorbisError::from_vorbis(VorbisErrorKind::CreateEncoder))?;
+        });
+
+        builder
+            .build()
+            .map_err(VorbisError::from_vorbis(VorbisErrorKind::CreateEncoder))?
+    };
 
     let start_pos = source.position();
     let stream_size = u32::from(info.size) as usize;
