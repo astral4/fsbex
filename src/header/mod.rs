@@ -144,15 +144,15 @@ impl TryFrom<u32> for Version {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum AudioFormat {
-    /// PCM 8-bit with samples stored as unsigned integers.
+    /// PCM with 8-bit integer samples.
     Pcm8,
-    /// PCM 16-bit with samples stored as unsigned integers.
+    /// PCM with 16-bit integer samples.
     Pcm16,
-    /// PCM 24-bit with samples stored as unsigned integers.
+    /// PCM with 24-bit integer samples.
     Pcm24,
-    /// PCM 32-bit with samples stored as unsigned integers.
+    /// PCM with 32-bit integer samples.
     Pcm32,
-    /// PCM 32-bit with samples stored as IEEE 754 floating-point numbers.
+    /// PCM with 32-bit float (IEEE 754) samples.
     PcmFloat,
     /// GC ADPCM, used in games for the GameCube, Wii and Wii U.
     GcAdpcm,
@@ -167,7 +167,7 @@ pub enum AudioFormat {
     /// XMA, used in games for the Xbox 360.
     /// XMA is based on the Windows Media format (WMA).
     Xma,
-    /// MPEG, an audiovisual format developed by the
+    /// MPEG, developed by the
     /// [ISO/IEC Moving Picture Experts Group](https://en.wikipedia.org/wiki/Moving_Picture_Experts_Group).
     Mpeg,
     /// CELT, developed by the [Xiph.Org Foundation](https://en.wikipedia.org/wiki/Xiph.Org_Foundation).
@@ -180,7 +180,6 @@ pub enum AudioFormat {
     /// xWMA is similar to the WAVE and XMA formats.
     Xwma,
     /// Vorbis, developed by the [Xiph.Org Foundation](https://en.wikipedia.org/wiki/Xiph.Org_Foundation).
-    /// Vorbis is a common music format in mobile and low-spec games.
     Vorbis,
     /// FADPCM, an ADPCM format developed by Firelight Technologies for use with FMOD.
     FAdpcm,
