@@ -1,6 +1,6 @@
 [package]
 name = "fsbex"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["astral4"]
 edition = "2021"
 description = "Library for extracting audio from FMOD sound banks"
