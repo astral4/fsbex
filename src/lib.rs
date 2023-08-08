@@ -28,12 +28,12 @@
 //!     }
 //!
 //!     // iterate over streams
-//!     for (index, stream) in bank.into_iter().enumerate() {
+//!     for stream in bank {
 //!         // check stream name
 //!         let file_name = if let Some(name) = stream.name() {
 //!             format!("{name}.ogg")
 //!         } else {
-//!             format!("stream_{index}.ogg")
+//!             format!("stream_{}.ogg", stream.index())
 //!         };
 //!
 //!         // write stream data to file
