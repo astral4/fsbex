@@ -27,19 +27,14 @@ pub(super) fn encode<R: Read, W: Write>(
     let (id_header, setup_header) =
         init_headers(info.sample_rate.into(), info.channels.into(), crc32)?;
 
-    #[allow(unused_results)]
-    let mut encoder = {
-        let mut builder = VorbisEncoderBuilder::new(info.sample_rate, info.channels, sink)
-            .map_err(VorbisError::from_vorbis(VorbisErrorKind::CreateEncoder))?;
-
-        builder.bitrate_management_strategy(VorbisBitrateManagementStrategy::QualityVbr {
+    // construct encoder that prioritizes audio quality
+    let mut encoder = VorbisEncoderBuilder::new(info.sample_rate, info.channels, sink)
+        .map_err(VorbisError::from_vorbis(VorbisErrorKind::CreateEncoder))?
+        .bitrate_management_strategy(VorbisBitrateManagementStrategy::QualityVbr {
             target_quality: 1.0,
-        });
-
-        builder
-            .build()
-            .map_err(VorbisError::from_vorbis(VorbisErrorKind::CreateEncoder))?
-    };
+        })
+        .build()
+        .map_err(VorbisError::from_vorbis(VorbisErrorKind::CreateEncoder))?;
 
     let start_pos = source.position();
     let stream_size = u32::from(info.size) as usize;
