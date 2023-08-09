@@ -3,7 +3,7 @@ use crate::read::{ReadError, Reader};
 use crate::stream::{LazyStream, Stream, StreamIntoIter};
 use std::{
     error::Error,
-    fmt::{Display, Formatter, Result as FmtResult},
+    fmt::{Debug, Display, Formatter, Result as FmtResult},
     io::Read,
     num::NonZeroU32,
 };
@@ -125,6 +125,32 @@ impl<R: Read> Bank<R> {
     }
 }
 
+// Wrapper for implementing Debug for types that already implement Display
+struct FormatWrapper<T: Display>(T);
+
+impl<T: Display> Debug for FormatWrapper<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        self.0.fmt(f)
+    }
+}
+
+impl<R: Read> Display for Bank<R> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        let stream_info: Box<_> = self
+            .header
+            .stream_info
+            .iter()
+            .map(ToString::to_string)
+            .map(FormatWrapper)
+            .collect();
+
+        f.debug_struct("Bank")
+            .field("format", &self.header.format)
+            .field("streams", &stream_info)
+            .finish()
+    }
+}
+
 impl<R: Read> From<Bank<R>> for StreamIntoIter<R> {
     fn from(value: Bank<R>) -> Self {
         Self::new(
@@ -164,7 +190,7 @@ impl From<HeaderError> for DecodeError {
 
 impl Display for DecodeError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        self.inner.fmt(f)
+        Display::fmt(&self.inner, f)
     }
 }
 

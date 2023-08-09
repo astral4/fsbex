@@ -7,6 +7,7 @@ use error::{
 };
 use std::{
     ffi::CStr,
+    fmt::{Display, Formatter, Result as FmtResult},
     io::Read,
     iter::zip,
     num::{NonZeroU32, NonZeroU8},
@@ -210,6 +211,30 @@ impl AudioFormat {
             17 => Ok(Self::Opus),
             flag => Err(HeaderError::new(HeaderErrorKind::UnknownAudioFormat { flag })),
         }
+    }
+}
+
+impl Display for AudioFormat {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        f.write_str(match self {
+            Self::Pcm8 => "PCM (8-bit, integer)",
+            Self::Pcm16 => "PCM (16-bit, integer)",
+            Self::Pcm24 => "PCM (24-bit, integer)",
+            Self::Pcm32 => "PCM (32-bit, integer)",
+            Self::PcmFloat => "PCM (32-bit, float)",
+            Self::GcAdpcm => "GC ADPCM",
+            Self::ImaAdpcm => "IMA ADPCM",
+            Self::Vag => "VAG",
+            Self::HeVag => "HEVAG",
+            Self::Xma => "XMA",
+            Self::Mpeg => "MPEG",
+            Self::Celt => "CELT",
+            Self::Atrac9 => "ATRAC9",
+            Self::Xwma => "xWMA",
+            Self::Vorbis => "Vorbis",
+            Self::FAdpcm => "FADPCM",
+            Self::Opus => "Opus",
+        })
     }
 }
 
@@ -578,6 +603,23 @@ impl StreamHeader {
             size,
             name: None,
         }
+    }
+}
+
+impl Display for StreamInfo {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        let mut output = f.debug_struct("StreamInfo");
+
+        if let Some(name) = &self.name {
+            output.field("name", name)
+        } else {
+            &mut output
+        }
+        .field("sample rate", &self.sample_rate)
+        .field("channels", &self.channels)
+        .field("sample count", &self.num_samples)
+        .field("size in bytes", &self.size)
+        .finish()
     }
 }
 
