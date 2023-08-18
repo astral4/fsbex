@@ -8,30 +8,20 @@ use std::{
     io::{copy, Error as IoError, Read, Write},
 };
 
-pub(super) fn encode<
-    R: Read,
-    W: Write,
-    const BYTE_DEPTH: u16,
-    const BYTE_DEPTH_USIZE: usize,
-    const IS_INT: bool,
->(
-    order: Order,
+pub(super) fn encode<R: Read, W: Write, const BYTE_DEPTH: usize>(
+    format: Format,
+    order: Endianness,
     info: &StreamInfo,
     source: &mut Reader<R>,
-    sink: W,
+    mut sink: W,
 ) -> Result<W, PcmError> {
-    // The byte depth value can't be cast to other types, so there are two const generic parameters for it.
-    // This will no longer be necessary when the generic_const_exprs feature is stabilized.
-    // The tracking issue is at https://github.com/rust-lang/rust/issues/76560.
-    debug_assert_eq!(BYTE_DEPTH as usize, BYTE_DEPTH_USIZE);
-
-    let mut sink = sink;
-
     // write the WAVE file header
-    write_header::<_, BYTE_DEPTH, IS_INT>(
+    write_header(
         info.size.into(),
         u16::from(u8::from(info.channels)),
         info.sample_rate.into(),
+        format,
+        BYTE_DEPTH.try_into().expect("byte depth is less than u16::MAX"),
         &mut sink,
     )
     .map_err(PcmError::from_io(PcmErrorKind::CreateHeader))?;
@@ -43,7 +33,7 @@ pub(super) fn encode<
     // However, samples can be stored as big-endian; when this happens, the samples have to be converted.
     // Otherwise, the stream data can be directly copied from reader to writer.
 
-    if !IS_INT || order == Order::LittleEndian {
+    if format == Format::Float || order == Endianness::Little {
         // There could be more data after the stream, so a limit is placed on the number of bytes read.
         return copy(&mut source.limit(stream_size), &mut sink)
             .map(|_| sink)
@@ -52,7 +42,7 @@ pub(super) fn encode<
 
     while source.position() - start_pos < stream_size {
         let mut sample = source
-            .take_const::<BYTE_DEPTH_USIZE>()
+            .take_const::<BYTE_DEPTH>()
             .map_err(PcmError::from_read(PcmErrorKind::DecodeSample))?;
 
         // This is optimized out when BYTE_DEPTH == 1
@@ -67,31 +57,35 @@ pub(super) fn encode<
         .map_err(PcmError::from_io(PcmErrorKind::FinishStream))
 }
 
-fn write_header<W: Write, const BYTE_DEPTH: u16, const IS_INT: bool>(
+fn write_header<W: Write>(
     file_size: u32,
     channels: u16,
     sample_rate: u32,
+    format: Format,
+    byte_depth: u16,
     sink: &mut W,
 ) -> Result<(), IoError> {
     // WAVE file header information taken from:
     // [1]: https://www-mmsp.ece.mcgill.ca/Documents/AudioFormats/WAVE/WAVE.html
     // [2]: http://soundfile.sapp.org/doc/WaveFormat/
 
+    let format_id = match format {
+        Format::Integer => 1u16,
+        Format::Float => 3u16,
+    };
+    let bytes_per_second = sample_rate * u32::from(channels) * u32::from(byte_depth);
+
     sink.write_all(b"RIFF")?;
     sink.write_all((file_size - 8).to_le_bytes().as_slice())?;
     sink.write_all(b"WAVE")?;
     sink.write_all(b"fmt ")?;
     sink.write_all(16u32.to_le_bytes().as_slice())?;
-    sink.write_all((if IS_INT { 1u16 } else { 3u16 }).to_le_bytes().as_slice())?;
+    sink.write_all(format_id.to_le_bytes().as_slice())?;
     sink.write_all(channels.to_le_bytes().as_slice())?;
     sink.write_all(sample_rate.to_le_bytes().as_slice())?;
-    sink.write_all(
-        (sample_rate * u32::from(channels) * u32::from(BYTE_DEPTH))
-            .to_le_bytes()
-            .as_slice(),
-    )?;
-    sink.write_all((channels * BYTE_DEPTH).to_le_bytes().as_slice())?;
-    sink.write_all((BYTE_DEPTH * 8).to_le_bytes().as_slice())?;
+    sink.write_all(bytes_per_second.to_le_bytes().as_slice())?;
+    sink.write_all((channels * byte_depth).to_le_bytes().as_slice())?;
+    sink.write_all((byte_depth * 8).to_le_bytes().as_slice())?;
     sink.write_all(b"data")?;
     sink.write_all((file_size - 40).to_le_bytes().as_slice())?;
 
@@ -99,9 +93,15 @@ fn write_header<W: Write, const BYTE_DEPTH: u16, const IS_INT: bool>(
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum Order {
-    LittleEndian,
-    BigEndian,
+pub(super) enum Format {
+    Integer,
+    Float,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Endianness {
+    Little,
+    Big,
 }
 
 /// Represents an error that can occur when encoding a PCM stream.
