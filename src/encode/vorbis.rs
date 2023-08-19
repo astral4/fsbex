@@ -218,7 +218,7 @@ impl Error for VorbisError {
 impl Display for VorbisErrorKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         f.write_str(match self {
-            Self::MissingCrc32 => "File header did not contain CRC32 of Vorbis setup header",
+            Self::MissingCrc32 => "file header did not contain CRC32 of Vorbis setup header",
             Self::CreateHeaders => "failed to create dummy Vorbis headers",
             Self::Crc32Lookup => "CRC32 of Vorbis setup header was not found in lookup table",
             Self::CreateEncoder => "failed to create Vorbis stream encoder",

@@ -38,9 +38,9 @@ impl From<VorbisError> for EncodeError {
 impl Display for EncodeError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
-            Self::UnsupportedFormat { format } => f.write_fmt(format_args!(
-                "encoding for {format:?} streams is currently unsupported"
-            )),
+            Self::UnsupportedFormat { format } => {
+                f.write_fmt(format_args!("encoding for {format} streams is not supported"))
+            }
             Self::Pcm(_) => f.write_str("failed to encode PCM stream"),
             Self::Vorbis(_) => f.write_str("failed to encode Vorbis stream"),
         }
