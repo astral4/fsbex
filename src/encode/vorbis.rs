@@ -10,6 +10,7 @@ use std::{
     fmt::{Display, Formatter, Result as FmtResult},
     io::{Error as IoError, Read, Write},
 };
+use tap::Pipe;
 use vorbis_rs::{VorbisBitrateManagementStrategy, VorbisEncoderBuilder};
 
 pub(super) fn encode<R: Read, W: Write>(
@@ -54,7 +55,7 @@ pub(super) fn encode<R: Read, W: Write>(
             .take(packet_size as usize)
             .map_err(VorbisError::from_read(VorbisErrorKind::ReadPacket))?;
 
-        let block: Vec<Vec<f32>> =
+        let block: Vec<_> =
             read_audio_packet_generic(&id_header, &setup_header, packet.as_slice(), &mut window)
                 .map_err(Into::into)
                 .map_err(VorbisError::from_lewton(VorbisErrorKind::DecodePacket))?;
@@ -79,10 +80,9 @@ fn init_headers(
     crc32: u32,
 ) -> Result<(IdentHeader, SetupHeader), VorbisError> {
     // construct identification header from scratch
-    let id_header_data = init_id_header_data(sample_rate, channels)
-        .expect("writing to an in-memory buffer is infallible");
-
-    let id_header = read_header_ident(id_header_data.as_slice())
+    let id_header = init_id_header_data(sample_rate, channels)
+        .expect("writing to an in-memory buffer is infallible")
+        .pipe_as_ref(read_header_ident)
         .map_err(Into::into)
         .map_err(VorbisError::from_lewton(VorbisErrorKind::CreateHeaders))?;
 

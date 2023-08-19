@@ -7,6 +7,7 @@ use std::{
     io::Read,
     num::NonZeroU32,
 };
+use tap::Pipe;
 
 /// An FMOD sound bank.
 ///
@@ -82,8 +83,10 @@ impl<R: Read> Bank<R> {
     /// Returns the number of streams in the sound bank.
     #[must_use]
     pub fn num_streams(&self) -> NonZeroU32 {
-        let count = self.header.stream_info.len();
-        u32::try_from(count)
+        self.header
+            .stream_info
+            .len()
+            .pipe(u32::try_from)
             .expect("stream count was already validated to be NonZeroU32")
             .try_into()
             .expect("stream count was already validated to be NonZeroU32")

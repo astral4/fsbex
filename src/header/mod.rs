@@ -11,7 +11,9 @@ use std::{
     io::Read,
     iter::zip,
     num::{NonZeroU32, NonZeroU8},
+    ops::Mul,
 };
+use tap::Pipe;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Header {
@@ -438,11 +440,10 @@ fn parse_stream_chunks<R: Read>(
                 // When encoding this stream, the checksum is used to recover the original setup header.
                 // The seek table is discarded because it isn't useful for stream decoding or encoding.
 
-                let crc32 = reader
+                stream.vorbis_crc32 = reader
                     .le_u32()
-                    .map_err(ChunkError::factory(index, ChunkErrorKind::VorbisCrc32))?;
-
-                stream.vorbis_crc32 = Some(crc32);
+                    .map_err(ChunkError::factory(index, ChunkErrorKind::VorbisCrc32))?
+                    .pipe(Some);
             }
             VorbisIntraLayers => {
                 // Some Vorbis stream data is stored as multiple "layers" per channel.
@@ -452,11 +453,12 @@ fn parse_stream_chunks<R: Read>(
                     .le_u32()
                     .map_err(ChunkError::factory(index, ChunkErrorKind::VorbisLayerCount))?;
 
-                let layers: u8 = layers.try_into().map_err(|_| {
-                    ChunkError::new(index, ChunkErrorKind::TooManyVorbisLayers { layers })
-                })?;
-
-                stream.channels = (u8::from(stream.channels) * layers)
+                stream.channels = layers
+                    .pipe(u8::try_from)
+                    .map_err(|_| {
+                        ChunkError::new(index, ChunkErrorKind::TooManyVorbisLayers { layers })
+                    })?
+                    .mul(u8::from(stream.channels))
                     .try_into()
                     .map_err(|_| ChunkError::new(index, ChunkErrorKind::ZeroVorbisLayers))?;
             }
@@ -608,18 +610,16 @@ impl StreamHeader {
 
 impl Display for StreamInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        let mut output = f.debug_struct("StreamInfo");
-
-        if let Some(name) = &self.name {
-            output.field("name", name)
-        } else {
-            &mut output
-        }
-        .field("sample rate", &self.sample_rate)
-        .field("channels", &self.channels)
-        .field("sample count", &self.num_samples)
-        .field("size in bytes", &self.size)
-        .finish()
+        f.debug_struct("StreamInfo")
+            .pipe_ref_mut(|repr| match &self.name {
+                Some(name) => repr.field("name", name),
+                None => repr,
+            })
+            .field("sample rate", &self.sample_rate)
+            .field("channels", &self.channels)
+            .field("sample count", &self.num_samples)
+            .field("size in bytes", &self.size)
+            .finish()
     }
 }
 
@@ -629,16 +629,15 @@ fn read_stream_names<R: Read>(
     stream_info: &mut [StreamInfo],
 ) -> Result<(), NameError> {
     for (name_len, index) in name_offsets.windows(2).map(|window| window[1] - window[0]).zip(0..) {
-        let name_bytes = reader
+        stream_info[index as usize].name = reader
             .take(name_len as usize)
-            .map_err(NameError::read_factory(index, NameErrorKind::Name))?;
-
-        let raw_name = CStr::from_bytes_until_nul(name_bytes.as_slice())
-            .map_err(NameError::cstr_factory(index))?;
-
-        let name = raw_name.to_str().map_err(NameError::utf8_factory(index))?.into();
-
-        stream_info[index as usize].name = Some(name);
+            .map_err(NameError::read_factory(index, NameErrorKind::Name))?
+            .pipe_as_ref(CStr::from_bytes_until_nul)
+            .map_err(NameError::cstr_factory(index))?
+            .to_str()
+            .map_err(NameError::utf8_factory(index))?
+            .pipe(Some)
+            .map(Into::into)
     }
 
     Ok(())
