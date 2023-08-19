@@ -159,13 +159,7 @@ impl PcmError {
 
 impl Display for PcmError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        f.write_str(match self.kind {
-            PcmErrorKind::CreateHeader => "failed to encode file header",
-            PcmErrorKind::EncodeStream => "failed to encode full PCM stream",
-            PcmErrorKind::DecodeSample => "failed to decode sample from PCM stream",
-            PcmErrorKind::EncodeSample => "failed to encode sample",
-            PcmErrorKind::FinishStream => "failed to finalize writing PCM stream data",
-        })
+        self.kind.fmt(f)
     }
 }
 
@@ -175,5 +169,17 @@ impl Error for PcmError {
             PcmErrorSource::Io(e) => Some(e),
             PcmErrorSource::Read(e) => Some(e),
         }
+    }
+}
+
+impl Display for PcmErrorKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        f.write_str(match self {
+            Self::CreateHeader => "failed to encode file header",
+            Self::EncodeStream => "failed to encode full PCM stream",
+            Self::DecodeSample => "failed to decode sample from PCM stream",
+            Self::EncodeSample => "failed to encode sample",
+            Self::FinishStream => "failed to finalize writing PCM stream data",
+        })
     }
 }

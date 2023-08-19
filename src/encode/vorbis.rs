@@ -198,20 +198,7 @@ impl VorbisError {
 
 impl Display for VorbisError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        f.write_str(match self.kind {
-            VorbisErrorKind::MissingCrc32 => {
-                "File header did not contain CRC32 of Vorbis setup header"
-            }
-            VorbisErrorKind::CreateHeaders => "failed to create dummy Vorbis headers",
-            VorbisErrorKind::Crc32Lookup => {
-                "CRC32 of Vorbis setup header was not found in lookup table"
-            }
-            VorbisErrorKind::CreateEncoder => "failed to create Vorbis stream encoder",
-            VorbisErrorKind::ReadPacket => "failed to read audio packet from Vorbis stream",
-            VorbisErrorKind::DecodePacket => "failed to decode audio packet from Vorbis stream",
-            VorbisErrorKind::EncodeBlock => "failed to encode block of samples",
-            VorbisErrorKind::FinishStream => "failed to finalize writing Vorbis stream data",
-        })
+        self.kind.fmt(f)
     }
 }
 
@@ -225,5 +212,20 @@ impl Error for VorbisError {
             },
             None => None,
         }
+    }
+}
+
+impl Display for VorbisErrorKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        f.write_str(match self {
+            Self::MissingCrc32 => "File header did not contain CRC32 of Vorbis setup header",
+            Self::CreateHeaders => "failed to create dummy Vorbis headers",
+            Self::Crc32Lookup => "CRC32 of Vorbis setup header was not found in lookup table",
+            Self::CreateEncoder => "failed to create Vorbis stream encoder",
+            Self::ReadPacket => "failed to read audio packet from Vorbis stream",
+            Self::DecodePacket => "failed to decode audio packet from Vorbis stream",
+            Self::EncodeBlock => "failed to encode block of samples",
+            Self::FinishStream => "failed to finalize writing Vorbis stream data",
+        })
     }
 }
