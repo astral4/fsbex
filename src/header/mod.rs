@@ -608,21 +608,6 @@ impl StreamHeader {
     }
 }
 
-impl Display for StreamInfo {
-    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        f.debug_struct("StreamInfo")
-            .pipe_ref_mut(|repr| match &self.name {
-                Some(name) => repr.field("name", name),
-                None => repr,
-            })
-            .field("sample rate", &self.sample_rate)
-            .field("channels", &self.channels)
-            .field("sample count", &self.num_samples)
-            .field("size in bytes", &self.size)
-            .finish()
-    }
-}
-
 fn read_stream_names<R: Read>(
     reader: &mut Reader<R>,
     name_offsets: &[u32],
