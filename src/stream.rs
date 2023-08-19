@@ -114,7 +114,6 @@ impl<'bank, R: Read> LazyStream<'bank, R> {
 /// [`Bank`]: crate::Bank
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Stream {
-    index: u32,
     format: AudioFormat,
     flags: u32,
     info: StreamInfo,
@@ -122,26 +121,13 @@ pub struct Stream {
 }
 
 impl Stream {
-    pub(crate) fn new(
-        index: u32,
-        format: AudioFormat,
-        flags: u32,
-        info: StreamInfo,
-        data: Box<[u8]>,
-    ) -> Self {
+    pub(crate) fn new(format: AudioFormat, flags: u32, info: StreamInfo, data: Box<[u8]>) -> Self {
         Self {
-            index,
             format,
             flags,
             info,
             data,
         }
-    }
-
-    /// Returns the index of this stream within the sound bank.
-    #[must_use]
-    pub fn index(&self) -> u32 {
-        self.index
     }
 
     /// Returns the audio format of this stream. The format is the same for all streams in a sound bank.
@@ -242,9 +228,10 @@ impl<R: Read> Iterator for StreamIntoIter<R> {
             let size = u32::from(info.size) as usize;
             let start_pos = self.reader.position();
 
-            let stream = self.reader.take(size).ok().map(|data| {
-                Stream::new(self.index, self.format, self.flags, info, data.into_boxed_slice())
-            });
+            let stream =
+                self.reader.take(size).ok().map(|data| {
+                    Stream::new(self.format, self.flags, info, data.into_boxed_slice())
+                });
 
             self.reader.advance_to(start_pos + size).ok()?;
 
