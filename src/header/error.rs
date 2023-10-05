@@ -1,7 +1,7 @@
 use crate::read::ReadError;
-use core::ffi::FromBytesUntilNulError;
 use std::{
     error::Error,
+    ffi::FromBytesUntilNulError,
     fmt::{Display, Formatter, Result as FmtResult},
     str::Utf8Error,
 };
