@@ -10,11 +10,11 @@
 
 - Refactor PCM encoder internals
 - Refactor code with [`tap::Pipe`](https://docs.rs/tap/1.0.1/tap/trait.Pipe.html)
-- Adjust [`Display`](https://doc.rust-lang.org/1.71.0/core/fmt/trait.Display.html) impls for [`EncodeError`](https://docs.rs/fsbex/latest/fsbex/encode/enum.EncodeError.html) and [`VorbisErrorKind`](https://docs.rs/fsbex/0.3.0/fsbex/encode/enum.VorbisErrorKind.html)
+- Adjust [`Display`](https://doc.rust-lang.org/stable/core/fmt/trait.Display.html) impls for [`EncodeError`](https://docs.rs/fsbex/latest/fsbex/encode/enum.EncodeError.html) and [`VorbisErrorKind`](https://docs.rs/fsbex/0.3.0/fsbex/encode/enum.VorbisErrorKind.html)
 
 ### Added
 
-- Implement [`Display`](https://doc.rust-lang.org/1.71.0/core/fmt/trait.Display.html) for [`AudioFormat`](https://docs.rs/fsbex/0.3.0/fsbex/enum.AudioFormat.html), [`PcmErrorKind`](https://docs.rs/fsbex/0.3.0/fsbex/encode/enum.PcmErrorKind.html), and [`VorbisErrorKind`](https://docs.rs/fsbex/0.3.0/fsbex/encode/enum.VorbisErrorKind.html)
+- Implement [`Display`](https://doc.rust-lang.org/stable/core/fmt/trait.Display.html) for [`AudioFormat`](https://docs.rs/fsbex/0.3.0/fsbex/enum.AudioFormat.html), [`PcmErrorKind`](https://docs.rs/fsbex/0.3.0/fsbex/encode/enum.PcmErrorKind.html), and [`VorbisErrorKind`](https://docs.rs/fsbex/0.3.0/fsbex/encode/enum.VorbisErrorKind.html)
 
 ### Removed
 
