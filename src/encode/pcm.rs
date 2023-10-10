@@ -17,9 +17,9 @@ pub(super) fn encode<R: Read, W: Write, const BYTE_DEPTH: usize>(
 ) -> Result<W, PcmError> {
     // write the WAVE file header
     write_header(
-        info.size.into(),
-        u16::from(u8::from(info.channels)),
-        info.sample_rate.into(),
+        info.size.get(),
+        info.channels.get().into(),
+        info.sample_rate.get(),
         format,
         BYTE_DEPTH.try_into().expect("byte depth is less than u16::MAX"),
         &mut sink,
@@ -27,7 +27,7 @@ pub(super) fn encode<R: Read, W: Write, const BYTE_DEPTH: usize>(
     .map_err(PcmError::from_io(PcmErrorKind::CreateHeader))?;
 
     let start_pos = source.position();
-    let stream_size = u32::from(info.size) as usize;
+    let stream_size = info.size.get() as usize;
 
     // Stream samples are encoded as little-endian.
     // However, samples can be stored as big-endian; when this happens, the samples have to be converted.

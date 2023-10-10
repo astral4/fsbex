@@ -225,7 +225,7 @@ impl<R: Read> Iterator for StreamIntoIter<R> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let stream = self.info.get(self.index as usize).cloned().and_then(|info| {
-            let size = u32::from(info.size) as usize;
+            let size = info.size.get() as usize;
             let start_pos = self.reader.position();
 
             let stream =

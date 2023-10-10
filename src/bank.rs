@@ -108,7 +108,7 @@ impl<R: Read> Bank<R> {
         F: Fn(LazyStream<'_, R>) -> Result<(), E>,
     {
         for (info, index) in self.header.stream_info.iter().zip(0..) {
-            let size = u32::from(info.size) as usize;
+            let size = info.size.get() as usize;
             let start_pos = self.read.position();
 
             f(LazyStream::new(

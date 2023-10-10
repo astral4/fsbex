@@ -26,7 +26,7 @@ pub(super) fn encode<R: Read, W: Write>(
 
     // construct headers needed for decoding packets from stream data
     let (id_header, setup_header) =
-        init_headers(info.sample_rate.into(), info.channels.into(), crc32)?;
+        init_headers(info.sample_rate.get(), info.channels.get(), crc32)?;
 
     // construct encoder that prioritizes audio quality
     let mut encoder = VorbisEncoderBuilder::new(info.sample_rate, info.channels, sink)
@@ -38,7 +38,7 @@ pub(super) fn encode<R: Read, W: Write>(
         .map_err(VorbisError::from_vorbis(VorbisErrorKind::CreateEncoder))?;
 
     let start_pos = source.position();
-    let stream_size = u32::from(info.size) as usize;
+    let stream_size = info.size.get() as usize;
     let mut window = PreviousWindowRight::new();
 
     while source.position() - start_pos < stream_size {

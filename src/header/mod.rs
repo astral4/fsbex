@@ -102,9 +102,9 @@ impl Header {
         // then the first name's length (including the null terminator) is 12 - 0 = 12.
         // The final name offset is subtracted from the name table size to get the final name's length.
         if name_table_size != 0 {
-            let mut name_offsets = Vec::with_capacity(u32::from(num_streams) as usize + 1);
+            let mut name_offsets = Vec::with_capacity(num_streams.get() as usize + 1);
 
-            for index in 0..num_streams.into() {
+            for index in 0..num_streams.get() {
                 let offset = reader
                     .le_u32()
                     .map_err(NameError::read_factory(index, NameErrorKind::NameOffset))?;
@@ -245,12 +245,12 @@ fn parse_stream_headers<R: Read>(
     num_streams: NonZeroU32,
     total_stream_size: NonZeroU32,
 ) -> Result<Vec<StreamInfo>, HeaderError> {
-    let num_streams_usize = u32::from(num_streams) as usize;
+    let num_streams_usize = num_streams.get() as usize;
 
     let mut stream_headers = Vec::with_capacity(num_streams_usize);
     let mut stream_offsets = Vec::with_capacity(num_streams_usize + 1);
 
-    for index in 0..num_streams.into() {
+    for index in 0..num_streams.get() {
         // Stream headers contain information such as sample rate (Hz) and number of channels.
         // They can also contain metadata chunks useful for decoding and encoding stream data.
         // Sometimes, flags for header fields are set to 0 while the actual values are stored in chunks.
@@ -267,7 +267,7 @@ fn parse_stream_headers<R: Read>(
         stream_offsets.push(stream_header.data_offset);
         stream_headers.push(stream_header);
     }
-    stream_offsets.push(total_stream_size.into());
+    stream_offsets.push(total_stream_size.get());
 
     // Only stream offsets are stored in stream headers, so they are processed to get stream lengths.
     // Stream lengths are calculated the same way as name lengths in the name table.
@@ -412,7 +412,7 @@ fn parse_stream_chunks<R: Read>(
             DspCoefficients => {
                 // used for decoding and encoding GC ADPCM streams
 
-                let channels = u8::from(stream.channels);
+                let channels = stream.channels.get();
 
                 let mut dsp_coeffs = Vec::with_capacity(channels as usize);
 
@@ -458,7 +458,7 @@ fn parse_stream_chunks<R: Read>(
                     .map_err(|_| {
                         ChunkError::new(index, ChunkErrorKind::TooManyVorbisLayers { layers })
                     })?
-                    .mul(u8::from(stream.channels))
+                    .mul(stream.channels.get())
                     .try_into()
                     .map_err(|_| ChunkError::new(index, ChunkErrorKind::ZeroVorbisLayers))?;
             }
@@ -568,7 +568,7 @@ impl Loop {
     /// This value refers to the offset, in bytes, from the start of the stream data.
     #[must_use]
     pub fn end(&self) -> NonZeroU32 {
-        (self.start + u32::from(self.len))
+        (self.start + self.len.get())
             .try_into()
             .expect("the sum of u32 and NonZeroU32 must be NonZeroU32")
     }
