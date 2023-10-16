@@ -87,3 +87,8 @@ mod stream;
 pub use bank::{Bank, DecodeError, LazyStreamError};
 pub use header::{AudioFormat, Loop};
 pub use stream::{LazyStream, Stream, StreamIntoIter};
+
+// Decoding and encoding involves casting values from u32 to usize.
+// To ensure correct conversions, only compilation targets where usize is at least 32 bits are allowed.
+#[cfg(not(any(target_pointer_width = "32", target_pointer_width = "64")))]
+compile_error!("only targets with 32 or 64-bit wide pointers are supported");
