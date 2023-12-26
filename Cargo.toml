@@ -47,14 +47,3 @@ pedantic = "warn"
 enum_glob_use = "allow"
 module_name_repetitions = "allow"
 unusual_byte_groupings = "allow"
-
-# [profile.release]
-# panic = "abort"
-# codegen-units = 1
-# lto = true
-# strip = true
-
-[profile.release]
-codegen-units = 1
-lto = true
-# debug = true
