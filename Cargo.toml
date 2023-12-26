@@ -15,7 +15,7 @@ bilge = "0.2.0"
 lewton = { version = "0.10.2", default-features = false }
 phf = { version = "0.11.2", features = ["macros"] }
 tap = "1.0.1"
-vorbis_rs = { version = "0.5.4", features = ["stream-serial-rng"] }
+vorbis_rs = "0.5.4"
 
 [lints.rust]
 future_incompatible = "warn"
@@ -47,3 +47,14 @@ pedantic = "warn"
 enum_glob_use = "allow"
 module_name_repetitions = "allow"
 unusual_byte_groupings = "allow"
+
+# [profile.release]
+# panic = "abort"
+# codegen-units = 1
+# lto = true
+# strip = true
+
+[profile.release]
+codegen-units = 1
+lto = true
+# debug = true
