@@ -70,7 +70,8 @@ pub(super) fn encode<R: Read, W: Write>(
         .map_err(VorbisError::from_vorbis(VorbisErrorKind::FinishStream))
 }
 
-// default blocksize values for FMOD sound banks are 256 and 2048
+// default block sizes for FMOD sound banks:
+// minimum 256 samples; maximum 2048 samples
 const MIN_BLOCK_SIZE_EXP2: u8 = 8;
 const MAX_BLOCK_SIZE_EXP2: u8 = 11;
 
@@ -104,7 +105,7 @@ fn init_headers(
 
 fn init_id_header_data(sample_rate: u32, channels: u8) -> Result<Vec<u8>, IoError> {
     // Vorbis file header information taken from:
-    // [1]: https://www.xiph.org/vorbis/doc/Vorbis_I_spec.html (sections 4.1.1 and 4.1.2)
+    // [1]: https://www.xiph.org/vorbis/doc/Vorbis_I_spec.html (sections 4.2.1 and 4.2.2)
 
     const BLOCK_SIZES: u8 = (MAX_BLOCK_SIZE_EXP2 << 4) | (MIN_BLOCK_SIZE_EXP2);
 
