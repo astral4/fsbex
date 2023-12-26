@@ -372,7 +372,6 @@ fn parse_stream_chunks<R: Read>(
     stream: &mut StreamHeader,
 ) -> Result<(), ChunkError> {
     use crate::header::Loop;
-    #[allow(clippy::enum_glob_use)]
     use StreamChunkKind::*;
 
     for index in 0.. {
@@ -515,7 +514,6 @@ enum StreamChunkKind {
 
 impl RawStreamChunk {
     fn parse(self, chunk_index: u32) -> Result<StreamChunk, ChunkError> {
-        #[allow(clippy::enum_glob_use)]
         use StreamChunkKind::*;
 
         let kind = match self.kind().value() {
@@ -630,7 +628,6 @@ fn read_stream_names<R: Read>(
 
 #[cfg(test)]
 mod test {
-    #[allow(clippy::enum_glob_use)]
     use super::error::{ChunkErrorKind::*, HeaderErrorKind::*, StreamErrorKind::*};
     use super::{Header, RawStreamChunk, RawStreamHeader, StreamHeader, FSB5_MAGIC};
     use crate::read::Reader;
@@ -810,7 +807,6 @@ mod test {
 
     #[test]
     fn derived_stream_info_parsing_works() {
-        #[allow(clippy::unusual_byte_groupings)]
         let data = 0b011010000101100111100000001011_111001101101001101000100110_11_1110_0;
 
         let mode = RawStreamHeader::from(data);
@@ -832,7 +828,6 @@ mod test {
     }
 
     #[test]
-    #[allow(clippy::unusual_byte_groupings)]
     fn parse_stream_info() {
         let data = 0b011010000101100111100000001011_111001101101001101000100110_11_1110_0;
         let mode = RawStreamHeader::from(data);
@@ -863,7 +858,6 @@ mod test {
 
     #[test]
     fn derived_stream_chunk_parsing_works() {
-        #[allow(clippy::unusual_byte_groupings)]
         let data = 0b0001101_100001101110000000011001_0;
 
         let flags = RawStreamChunk::from(data);

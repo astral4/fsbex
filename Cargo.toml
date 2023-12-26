@@ -44,4 +44,6 @@ unused_tuple_struct_fields = "deny"
 
 [lints.clippy]
 pedantic = "warn"
+enum_glob_use = "allow"
 module_name_repetitions = "allow"
+unusual_byte_groupings = "allow"

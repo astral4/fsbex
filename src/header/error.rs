@@ -84,7 +84,6 @@ impl HeaderError {
 
 impl Display for HeaderError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        #[allow(clippy::enum_glob_use)]
         use HeaderErrorKind::*;
 
         match self.kind {
@@ -186,7 +185,6 @@ impl From<StreamError> for HeaderError {
 
 impl Display for StreamError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        #[allow(clippy::enum_glob_use)]
         use StreamErrorKind::*;
 
         match self.kind {
@@ -273,7 +271,6 @@ impl ChunkError {
 
 impl Display for ChunkError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        #[allow(clippy::enum_glob_use)]
         use ChunkErrorKind::*;
 
         match self.kind {
@@ -369,7 +366,6 @@ impl From<NameError> for HeaderError {
 
 impl Display for NameError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        #[allow(clippy::enum_glob_use)]
         use NameErrorKind::*;
 
         match self.kind {
