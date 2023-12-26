@@ -48,7 +48,7 @@ pub(super) fn encode<R: Read, W: Write, const BYTE_DEPTH: usize>(
         // This is optimized out when BYTE_DEPTH == 1
         sample.reverse();
 
-        sink.write_all(sample.as_slice())
+        sink.write_all(&sample)
             .map_err(PcmError::from_io(PcmErrorKind::EncodeSample))?;
     }
 
@@ -76,18 +76,18 @@ fn write_header<W: Write>(
     let bytes_per_second = sample_rate * u32::from(channels) * u32::from(byte_depth);
 
     sink.write_all(b"RIFF")?;
-    sink.write_all((file_size - 8).to_le_bytes().as_slice())?;
+    sink.write_all(&(file_size - 8).to_le_bytes())?;
     sink.write_all(b"WAVE")?;
     sink.write_all(b"fmt ")?;
-    sink.write_all(16u32.to_le_bytes().as_slice())?;
-    sink.write_all(format_id.to_le_bytes().as_slice())?;
-    sink.write_all(channels.to_le_bytes().as_slice())?;
-    sink.write_all(sample_rate.to_le_bytes().as_slice())?;
-    sink.write_all(bytes_per_second.to_le_bytes().as_slice())?;
-    sink.write_all((channels * byte_depth).to_le_bytes().as_slice())?;
-    sink.write_all((byte_depth * 8).to_le_bytes().as_slice())?;
+    sink.write_all(&16u32.to_le_bytes())?;
+    sink.write_all(&format_id.to_le_bytes())?;
+    sink.write_all(&channels.to_le_bytes())?;
+    sink.write_all(&sample_rate.to_le_bytes())?;
+    sink.write_all(&bytes_per_second.to_le_bytes())?;
+    sink.write_all(&(channels * byte_depth).to_le_bytes())?;
+    sink.write_all(&(byte_depth * 8).to_le_bytes())?;
     sink.write_all(b"data")?;
-    sink.write_all((file_size - 40).to_le_bytes().as_slice())?;
+    sink.write_all(&(file_size - 40).to_le_bytes())?;
 
     Ok(())
 }

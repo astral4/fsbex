@@ -56,7 +56,7 @@ pub(super) fn encode<R: Read, W: Write>(
             .map_err(VorbisError::from_read(VorbisErrorKind::ReadPacket))?;
 
         let block: Vec<_> =
-            read_audio_packet_generic(&id_header, &setup_header, packet.as_slice(), &mut window)
+            read_audio_packet_generic(&id_header, &setup_header, &packet, &mut window)
                 .map_err(Into::into)
                 .map_err(VorbisError::from_lewton(VorbisErrorKind::DecodePacket))?;
 
@@ -115,7 +115,7 @@ fn init_id_header_data(sample_rate: u32, channels: u8) -> Result<Vec<u8>, IoErro
     data.write_all(b"vorbis")?;
     data.write_all(&[0; 4])?;
     data.write_all(&[channels])?;
-    data.write_all(sample_rate.to_le_bytes().as_slice())?;
+    data.write_all(&sample_rate.to_le_bytes())?;
     data.write_all(&[0; 4])?;
     data.write_all(&[0; 4])?;
     data.write_all(&[0; 4])?;
