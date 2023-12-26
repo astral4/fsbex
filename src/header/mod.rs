@@ -564,6 +564,7 @@ impl Loop {
 
     /// Returns the ending position of the loop.
     /// This value refers to the offset, in bytes, from the start of the stream data.
+    #[allow(clippy::missing_panics_doc)]
     #[must_use]
     pub fn end(&self) -> NonZeroU32 {
         (self.start + self.len.get())
@@ -620,7 +621,7 @@ fn read_stream_names<R: Read>(
             .to_str()
             .map_err(NameError::utf8_factory(index))?
             .pipe(Some)
-            .map(Into::into)
+            .map(Into::into);
     }
 
     Ok(())

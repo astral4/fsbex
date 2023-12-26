@@ -81,6 +81,7 @@ impl<R: Read> Bank<R> {
     }
 
     /// Returns the number of streams in the sound bank.
+    #[allow(clippy::missing_panics_doc)]
     #[must_use]
     pub fn num_streams(&self) -> NonZeroU32 {
         self.header

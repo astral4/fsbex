@@ -53,7 +53,7 @@ pub(super) fn encode<R: Read, W: Write, const BYTE_DEPTH: usize>(
     }
 
     sink.flush()
-        .map(|_| sink)
+        .map(|()| sink)
         .map_err(PcmError::from_io(PcmErrorKind::FinishStream))
 }
 
