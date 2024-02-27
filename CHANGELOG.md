@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Refactor non-zero integer to integer conversions (e.g. replace [`u32::from()`](https://doc.rust-lang.org/stable/core/primitive.u32.html#method.from-4) and `NonZeroU32::into()` with [`NonZeroU32::get()`](https://doc.rust-lang.org/stable/core/num/struct.NonZeroU32.html#method.get))
+- Refactor non-zero integer to integer conversions (e.g. replace [`u32::from()`](https://doc.rust-lang.org/1.76.0/core/primitive.u32.html#method.from-7) and `NonZeroU32::into()` with [`NonZeroU32::get()`](https://doc.rust-lang.org/stable/core/num/struct.NonZeroU32.html#method.get))
 - Forbid compilation for targets with pointers smaller than 32 bits
 
 ## 0.3.0 - 2023-08-19
